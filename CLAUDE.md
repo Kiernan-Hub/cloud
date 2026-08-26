@@ -1,76 +1,98 @@
 # CLAUDE.md — Working Guide for This Repo
 
-This file is for whoever (or whatever AI) works on this repo next, including
-Claude. The full plan lives in `overview` at the repo root — read that first
-for details. This file is the short version, plus rules for how to work with
-Kiernan, who is a student using this project to **learn software
-architecture**, not just to get a finished app.
+Full detail lives in `overview` at the repo root. This file is the working
+summary: what we're building, the guardrails, and what counts as a
+green/red flag while building it.
 
-## What we're building (30-second version)
+## What we're building
 
 **HoosRadar** — a web app that pulls campus events from scattered UVA
-calendars/sources into one searchable place, with a link back to the original
-source and a visible "last checked" timestamp for every event.
+calendars/sources into one searchable place, with a link back to the
+original source and a visible "last checked" timestamp on every event.
 
-- **Not** a social network, not a chatbot, not scraping things we're not
-  allowed to scrape.
-- MVP = browse/search/filter events, see where they came from, export to a
-  calendar file, bookmark anonymously. Accounts, recommendations, and
-  notifications come later, only if real usage justifies them.
+- Not a social network, not a chatbot, not a scraper for sources that
+  disallow it.
+- MVP = browse/search/filter events, see where each one came from, export
+  to a calendar file, bookmark anonymously.
+- Accounts, recommendations, and notifications are post-MVP — only pursued
+  if real usage shows demand for them.
 
-## Why the architecture looks the way it does
+## Architecture, briefly
 
-- **Modular monolith + a separate worker process** — not microservices. One
-  deployable app, but internally split into clear modules (ingestion, events,
-  dedup, search, admin). This is a deliberate "don't over-engineer it"
-  choice — it's simpler to build and debug, and can be split apart later only
-  if there's a real reason to.
-- **Worker pulls events → parses → normalizes → dedupes → stores in
-  Postgres → API serves it → web client shows it.** Each step is separated so
-  one bad data source can't break the whole pipeline.
-- **Provenance matters everywhere.** Every event keeps its source link and
+- **Modular monolith + a separate worker process.** Not microservices. One
+  deployable app, internally split into clear modules (ingestion, events,
+  dedup, search, admin). Split further only if there's a proven reason to.
+- **Pipeline:** worker pulls a source → parses → normalizes → dedupes →
+  stores in Postgres → API serves it → web client renders it. Each stage is
+  isolated so one bad source can't break the whole thing.
+- **Provenance is non-negotiable.** Every event keeps its source link and
   freshness timestamp. Nothing gets silently overwritten or invented.
-- **Tests and fixtures over live network calls in CI.** Source parsers get
-  tested against saved sample data, not the live internet, so tests don't
-  become flaky because an external site changed.
+- **Parsers are tested against saved fixtures, not live network calls**, so
+  CI doesn't get flaky when an external site changes.
 
-## The roadmap (milestones, briefly)
+## Roadmap (milestones)
 
-0. Discovery — interview students, pick real data sources, write down
-   architecture decisions.
-1. Walking skeleton — app + worker + database running end-to-end with fake
-   seeded data. No real source yet. Goal: prove the whole pipeline works.
+0. Discovery — interview students, vet real data sources, write architecture
+   decisions.
+1. Walking skeleton — app + worker + database running end-to-end on seeded
+   fake data, no live source yet.
 2. First real ingestion source — one live source, idempotent imports, tested
    failure handling.
 3. Useful discovery MVP — search, filters, second source, dedup, bookmarks,
    calendar export.
 4. Deploy + validate — real deployment, monitoring, usability testing with
    real students.
-5. Personalization — accounts/recommendations, but only if Milestone 4
-   showed real demand for it.
-6. Portfolio hardening — write up the results, diagrams, case study.
+5. Personalization — accounts/recommendations, only if Milestone 4 showed
+   real demand.
+6. Portfolio hardening — write-up, diagrams, case study.
 
-Full detail, exit criteria, and non-goals for each milestone are in
-`overview`.
+Exit criteria and non-goals per milestone are in `overview`.
 
-## Teaching rule — most important part of this file
+## Green flags — keep doing these
 
-Kiernan is doing this to learn, not just to ship. **Do not silently
-one-shot large chunks of work.** Every so often — after finishing a
-meaningful step, hitting a real design decision, or starting a new
-milestone — **stop and explain in plain language**:
+- Treat the MVP list in `overview` as a hard boundary; require evidence
+  before adding anything past it.
+- Every behavior change ships with tests and a doc/comment update if it
+  changes how something is used.
+- Idempotent imports — running ingestion twice must not create duplicates.
+- Keep source-specific parsing isolated from normalization/storage logic.
+- Retain provenance on every merge/dedup — merges must be reversible.
+- Use fixtures for parser tests; keep live-source tests separate from CI.
+- Small, reversible, well-documented decisions — make them and move on.
+- Structured logs, traceable ingestion-run IDs, no secrets in logs or code.
+- Commit with descriptive messages; keep one milestone/scope in progress
+  at a time.
 
-- what was just built or decided, and why
-- what tradeoff or architecture concept it demonstrates
-- what's coming next
+## Red flags — stop or rethink
 
-Keep these explanations short and conversational, aimed at someone learning
-architecture for the first time — not a wall of jargon. It's fine (expected)
-to ask "want me to explain X before I continue?" rather than assuming.
+- A source without a documented owner, terms, and collection method.
+- Any code that fabricates event details instead of pulling from a source.
+- Deleting/overwriting imported data instead of tracking corrections.
+- An import that isn't safe to re-run (non-idempotent writes).
+- Reaching for microservices, a message queue, or a new infra dependency
+  before the simple version has been tried and measured.
+- Tests that depend on a live external site to pass.
+- Scope creep toward accounts, notifications, or maps before the MVP is
+  validated.
+- Committing secrets, credentials, or real UVA private data.
+- Silent failures — a bad record should be logged and skipped, not allowed
+  to fail the whole ingestion batch or fail invisibly.
 
-## Guardrails (from the working agreement in `overview`)
+## Stop and ask before
 
-Stop and ask before: spending money, deploying publicly, using any real UVA
-private data/credentials, or making an irreversible infrastructure change.
-Everything else reversible (code structure, dependencies, test fixtures) can
-proceed without asking first.
+- Spending money or provisioning a paid service.
+- Accepting legal terms on the owner's behalf.
+- Using private UVA data or credentials.
+- Publishing personal information.
+- Making an irreversible data or infrastructure change.
+- Changing the core product audience or MVP boundary.
+- Deploying publicly without standing permission to do so.
+
+Reversible implementation choices — dependencies, internal refactors, test
+fixtures — don't need approval first.
+
+## Learning note
+
+Kiernan is building this to learn architecture, not just to ship it. When
+finishing a meaningful step or making a real design call, pause and explain
+what it demonstrates before moving on — briefly, not a wall of text.
