@@ -35,7 +35,8 @@ will not begin as a general-purpose social network or chatbot.
 3. Model provenance, duplicate detection, and source freshness explicitly.
 4. Maintain automated unit, integration, accessibility, and end-to-end tests.
 5. Deploy reproducibly using free or low-cost infrastructure where practical.
-6. Record measurable results suitable for a portfolio and resume case study.
+6. Record measured results and design decisions so the system can be
+   evaluated by others, not just asserted.
 
 ### Non-goals for the initial release
 
@@ -190,7 +191,7 @@ internal page. It must support:
 - Target a p95 search API response below 500 milliseconds on the MVP dataset.
 - Set explicit pagination limits and database query budgets.
 
-These are targets, not resume claims, until measured in a representative
+These are targets, not claims, until measured in a representative
 environment.
 
 ### Reliability and observability
@@ -371,13 +372,14 @@ tested, and user findings plus follow-up decisions are documented.
 **Exit criteria:** recommendations beat the baseline on a defined offline or
 user evaluation, and users can understand and control personalization.
 
-### Milestone 6: portfolio hardening
+### Milestone 6: documentation and evaluation
 
 - Produce an architecture diagram and technical case study.
 - Publish measured performance, reliability, and data-quality results.
 - Record a concise demonstration video.
 - Audit documentation for reproducibility.
-- Prepare interview notes explaining major tradeoffs and failures encountered.
+- Write up the major tradeoffs and failures encountered, and what each one
+  changed about the design.
 
 **Exit criteria:** every public claim is supported by a reproducible measurement
 or documented user study.
@@ -446,7 +448,7 @@ external outage does not make ordinary pull requests flaky.
 - Deployment and restore success rate
 
 Metrics must be reported with timeframe, sample size, environment, and method.
-Vanity metrics and invented resume numbers are not acceptable.
+Vanity metrics and invented numbers are not acceptable.
 
 ## 14. Risks and mitigations
 
@@ -474,7 +476,7 @@ next unblocked roadmap item using these rules:
 5. Run the relevant quality checks before committing.
 6. Commit coherent changes with descriptive messages and create a pull request.
 7. Record important decisions, assumptions, and measurements in the repository.
-8. Do not fabricate data, users, performance results, or resume claims.
+8. Do not fabricate data, users, performance results, or success claims.
 
 Work must stop and request owner input before:
 

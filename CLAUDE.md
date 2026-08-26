@@ -44,7 +44,7 @@ original source and a visible "last checked" timestamp on every event.
    real students.
 5. Personalization — accounts/recommendations, only if Milestone 4 showed
    real demand.
-6. Portfolio hardening — write-up, diagrams, case study.
+6. Documentation + evaluation — write-up, diagrams, measured results.
 
 Exit criteria and non-goals per milestone are in `overview`.
 
