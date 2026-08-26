@@ -1,0 +1,507 @@
+# HoosRadar Project Overview
+
+## 1. Product vision
+
+HoosRadar is a mobile-friendly campus discovery platform for the University of
+Virginia community. It brings events from multiple public UVA and
+student-organization sources into one searchable, trustworthy place. Students
+can find relevant activities without repeatedly checking calendars, mailing
+lists, and organization pages.
+
+The product should answer questions such as:
+
+- What is happening on Grounds today or this weekend?
+- Which events match my academic, professional, or social interests?
+- What can I attend between two classes or near my current location?
+- Where did an event come from, and when was its information last checked?
+
+The first release will focus on reliable event aggregation and discovery. It
+will not begin as a general-purpose social network or chatbot.
+
+## 2. Project goals
+
+### Product goals
+
+1. Create a single, fast interface for discovering campus events.
+2. Preserve a link to the original source for every event.
+3. Make event freshness and possible data uncertainty visible to users.
+4. Provide useful search and filters before adding AI-driven features.
+5. Validate the product with real student feedback and measured usage.
+
+### Engineering goals
+
+1. Build a production-style full-stack application with a documented API.
+2. Develop a resilient, observable ingestion and normalization pipeline.
+3. Model provenance, duplicate detection, and source freshness explicitly.
+4. Maintain automated unit, integration, accessibility, and end-to-end tests.
+5. Deploy reproducibly using free or low-cost infrastructure where practical.
+6. Record measurable results suitable for a portfolio and resume case study.
+
+### Non-goals for the initial release
+
+- Replacing official UVA calendars, safety information, or academic systems.
+- Scraping sources whose terms or technical controls prohibit collection.
+- Guaranteeing that every campus event is present or error-free.
+- Supporting private events, direct messaging, or a general social feed.
+- Generating unsourced event details with a language model.
+- Building native iOS and Android applications before the web product is
+  validated.
+
+## 3. Target users and core needs
+
+### Primary persona: exploring student
+
+A student wants to become more involved but does not know which organizations
+or calendars to follow. They need broad discovery, understandable categories,
+and low-friction ways to save events.
+
+### Secondary persona: busy student
+
+A student already has several interests but has limited free time. They need
+date, time, location, and topic filters, along with calendar export.
+
+### Secondary persona: event organizer
+
+An organizer wants students to find accurate public event information. In a
+later release, they may suggest corrections or submit a source for review.
+
+## 4. Core user journeys
+
+### Browse and filter
+
+1. A visitor opens the site and sees upcoming events.
+2. They filter by date, category, location, cost, or accessibility information.
+3. They open an event and follow its original source for authoritative details.
+
+### Search
+
+1. A visitor enters a query such as `beginner programming`.
+2. HoosRadar searches titles, descriptions, organizations, categories, and
+   locations.
+3. Results are ranked by relevance, time, and freshness without hiding why a
+   result matched.
+
+### Save and export
+
+1. A user bookmarks an event.
+2. The bookmark remains available on future visits after authentication is
+   introduced.
+3. The user exports the event to a standard calendar file.
+
+### Verify information
+
+1. A user views an event's source, last synchronization time, and last material
+   change.
+2. If sources disagree or information is stale, the interface communicates
+   that limitation.
+3. The user can report an error without directly overwriting imported data.
+
+## 5. Minimum viable product
+
+The MVP is complete when it includes:
+
+- A responsive upcoming-events page.
+- Event detail pages with canonical source links and freshness timestamps.
+- Search plus date, category, and location filters.
+- At least two approved public data sources, including a seeded/demo source for
+  reliable development.
+- A scheduled ingestion job with retries and structured error reporting.
+- A normalized event model with provenance and duplicate handling.
+- Calendar export using the iCalendar format.
+- Basic anonymous bookmarks stored in the browser.
+- Empty, loading, stale-data, and failure states.
+- Automated tests for critical ingestion and discovery paths.
+- Local setup, deployment, operations, and data-source documentation.
+- A deployed demonstration or a documented local demonstration if deployment
+  is blocked by external constraints.
+
+Accounts, personalized recommendations, notifications, maps, and natural
+language questions are post-MVP features.
+
+## 6. Functional requirements
+
+### Event records
+
+Each normalized event should support:
+
+- Stable internal identifier
+- Title and description
+- Start and end date/time with explicit timezone handling
+- Venue name, address, and optional geographic coordinates
+- Hosting organization
+- Category and tags
+- Cost/free status when provided
+- Accessibility details when provided by the source
+- Original URL and source identifier
+- Source publication/update time when available
+- First-seen, last-seen, and last-synchronized timestamps
+- Cancellation or stale status
+- Duplicate-group identifier and merge history
+
+Imported absence must not automatically mean an event was cancelled. The
+pipeline should distinguish deletion, cancellation, temporary source failure,
+and an event naturally aging out.
+
+### Search and discovery
+
+- Default ordering prioritizes upcoming, relevant, non-cancelled events.
+- Filters are reflected in the URL so searches can be shared.
+- Past events are excluded by default but remain queryable for analysis.
+- Search results expose useful matching context.
+- Pagination or cursor-based loading prevents unbounded responses.
+
+### Data ingestion
+
+- Every source has an owner, collection method, schedule, and documented terms.
+- Raw source payloads are retained for a limited debugging window when allowed.
+- Parsing is separated from normalization and persistence.
+- Import operations are idempotent.
+- A malformed record does not fail an entire import batch.
+- Retries use bounded exponential backoff.
+- Metrics capture run duration, records processed, changes, failures, and source
+  freshness.
+- Source-specific fixtures make parsers testable without live network access.
+
+### Administration
+
+The initial administration surface may be a protected command-line tool or
+internal page. It must support:
+
+- Viewing source health and recent ingestion runs.
+- Disabling a failing source.
+- Reprocessing a stored fixture or payload.
+- Reviewing likely duplicate groups.
+- Marking corrections without silently losing imported provenance.
+
+## 7. Quality attributes
+
+### Accessibility
+
+- Target WCAG 2.2 AA for primary journeys.
+- Support keyboard-only navigation and visible focus states.
+- Use semantic HTML and meaningful form labels.
+- Respect reduced-motion preferences.
+- Do not encode event categories using color alone.
+
+### Performance
+
+- Target a p75 Largest Contentful Paint below 2.5 seconds on a typical mobile
+  connection for the deployed MVP.
+- Target a p95 search API response below 500 milliseconds on the MVP dataset.
+- Set explicit pagination limits and database query budgets.
+
+These are targets, not resume claims, until measured in a representative
+environment.
+
+### Reliability and observability
+
+- Health checks distinguish the web process from external source health.
+- Logs are structured and exclude secrets and unnecessary personal data.
+- Every ingestion run has a traceable run identifier.
+- Alerts focus on stale sources, repeated import failures, and elevated API
+  errors.
+- The operations guide includes backup, restore, and source-disable procedures.
+
+### Security and privacy
+
+- Collect the minimum personal information required.
+- Do not ingest attendee lists or private organization information.
+- Store secrets outside source control and rotate exposed credentials.
+- Validate and sanitize imported content before rendering it.
+- Apply rate limits to public write endpoints.
+- Require authentication and authorization for administrative actions.
+- Publish a plain-language privacy statement before collecting accounts or
+  analytics identifiers.
+
+## 8. Proposed technical architecture
+
+The exact stack should be confirmed after inspecting constraints and creating a
+small technical spike. A pragmatic starting architecture is:
+
+1. **Web client:** a server-rendered TypeScript web application with progressive
+   enhancement and responsive styling.
+2. **Application API:** typed endpoints for events, filters, bookmarks, and
+   source status.
+3. **Database:** PostgreSQL for normalized records, ingestion state, full-text
+   search, and geospatial extensions when maps are introduced.
+4. **Worker:** a separate process for scheduled collection, parsing,
+   normalization, deduplication, and indexing.
+5. **Job mechanism:** begin with database-backed jobs to minimize operational
+   complexity; adopt a dedicated queue only after measurements justify it.
+6. **Object storage:** optional retention of permitted raw payloads and import
+   artifacts.
+7. **Monitoring:** structured logs, error reporting, source-freshness metrics,
+   and basic application performance telemetry.
+
+### Logical data flow
+
+```text
+Approved public source
+        |
+        v
+Fetcher -> raw snapshot -> source parser -> normalized candidate
+                                             |
+                                             v
+                                 validation and deduplication
+                                             |
+                                             v
+                                      PostgreSQL/search
+                                             |
+                                             v
+                                      API -> web client
+```
+
+### Suggested service boundaries
+
+Begin as a modular monolith plus a worker, not a collection of microservices.
+Keep clear internal modules for:
+
+- Sources and ingestion runs
+- Parsing and normalization
+- Events and organizations
+- Deduplication and provenance
+- Search and filtering
+- Users and bookmarks
+- Notifications (later)
+- Administration and observability
+
+This retains simple deployment while leaving boundaries that can be extracted
+only if scale or team ownership requires it.
+
+## 9. Data-source policy
+
+Before integrating a source, record:
+
+- Its owner and authoritative URL.
+- Whether it provides an API, feed, or structured page.
+- Applicable usage terms and robots directives.
+- Requested collection frequency and caching rules.
+- Expected event volume and required fields.
+- Contact/removal procedure.
+- Parser fixture and failure behavior.
+
+Prefer official APIs, RSS/Atom feeds, iCalendar feeds, and organization-provided
+exports. Use respectful request rates and identify the application where
+appropriate. A source must be disabled if its owner requests removal or its
+terms no longer permit collection.
+
+## 10. Deduplication strategy
+
+Duplicate handling should evolve in measurable stages:
+
+1. Exact match on source-specific identifiers.
+2. Canonical URL matching.
+3. Deterministic similarity using normalized title, organization, start time,
+   and venue.
+4. Human review for ambiguous high-impact matches.
+5. Optional learned ranking only after a labeled evaluation set exists.
+
+Merged events retain all contributing sources. The displayed record should use
+deterministic field-precedence rules, never discard provenance, and allow a
+merge to be reversed.
+
+The project should track precision and recall on a manually labeled duplicate
+test set before claiming that deduplication is effective.
+
+## 11. Delivery roadmap
+
+### Milestone 0: discovery and decisions
+
+- Confirm target users through five short student interviews.
+- Identify and review candidate public data sources.
+- Write architecture decision records for the stack, hosting, and job system.
+- Define the event schema and source policy.
+- Create low-fidelity flows for browse, search, detail, and failure states.
+
+**Exit criteria:** two legally and technically viable source strategies, agreed
+MVP scope, documented architecture, and prioritized backlog.
+
+### Milestone 1: walking skeleton
+
+- Scaffold the application and worker.
+- Add local database setup and migrations.
+- Render seeded events through the real API and database.
+- Configure formatting, linting, type checking, unit tests, and CI.
+- Add structured logging and basic health endpoints.
+
+**Exit criteria:** a new contributor can follow the README, start the system,
+view seeded events, run all checks, and understand the architecture.
+
+### Milestone 2: first ingestion path
+
+- Integrate one approved source.
+- Save ingestion-run metadata and permitted raw snapshots.
+- Parse, validate, normalize, and upsert events idempotently.
+- Add source fixtures, retry behavior, and failure tests.
+- Show source attribution and freshness on event pages.
+
+**Exit criteria:** repeated imports do not create duplicates, parser tests do not
+depend on the network, and a failed source does not remove valid events.
+
+### Milestone 3: useful discovery MVP
+
+- Add a second approved source.
+- Implement search, filters, pagination, and shareable URLs.
+- Introduce deterministic deduplication and a review mechanism.
+- Add anonymous bookmarks and calendar export.
+- Complete responsive, accessible empty/loading/error states.
+
+**Exit criteria:** all stated MVP journeys work on mobile and desktop, critical
+end-to-end tests pass, and accessibility checks have no known critical issues.
+
+### Milestone 4: deployment and validation
+
+- Add reproducible production deployment.
+- Configure backups, monitoring, and source-freshness alerts.
+- Complete a security and privacy review.
+- Conduct structured usability tests with at least five students.
+- Fix the most severe usability and reliability findings.
+
+**Exit criteria:** the demonstration is stable, operational procedures have been
+tested, and user findings plus follow-up decisions are documented.
+
+### Milestone 5: personalization
+
+- Add accounts only if validation shows durable bookmark demand.
+- Add explicit preference controls.
+- Build explainable, non-sensitive recommendation ranking.
+- Evaluate recommendation quality against a documented baseline.
+- Add opt-in notifications with frequency and unsubscribe controls.
+
+**Exit criteria:** recommendations beat the baseline on a defined offline or
+user evaluation, and users can understand and control personalization.
+
+### Milestone 6: portfolio hardening
+
+- Produce an architecture diagram and technical case study.
+- Publish measured performance, reliability, and data-quality results.
+- Record a concise demonstration video.
+- Audit documentation for reproducibility.
+- Prepare interview notes explaining major tradeoffs and failures encountered.
+
+**Exit criteria:** every public claim is supported by a reproducible measurement
+or documented user study.
+
+## 12. Testing strategy
+
+### Unit tests
+
+- Source parsing and timezone edge cases
+- Normalization and validation
+- Deduplication scoring and field precedence
+- Search query construction
+- Authorization rules
+
+### Integration tests
+
+- Database migrations and constraints
+- Idempotent import and source-failure behavior
+- API filtering, ordering, and pagination
+- Calendar export correctness
+- Administrative correction and provenance retention
+
+### End-to-end tests
+
+- Browse, filter, and open an event
+- Search and share a filtered URL
+- Save and export an event
+- View stale or conflicting source information
+- Use critical paths with keyboard navigation
+
+### Non-functional checks
+
+- Automated accessibility scans plus manual keyboard and screen-reader checks
+- Load tests for search and ingestion batches
+- Dependency, secret, and static security scanning
+- Backup restoration exercise
+- Parser regression runs against stored fixtures
+
+Live-source tests should be scheduled separately from deterministic CI so an
+external outage does not make ordinary pull requests flaky.
+
+## 13. Success metrics
+
+### Product metrics
+
+- Search-to-event-detail conversion
+- Calendar exports and saved events per active user
+- Percentage of searches returning at least one useful result
+- User-reported success finding an event in usability sessions
+- Repeat usage, measured only after privacy review and consent design
+
+### Data-quality metrics
+
+- Source freshness and successful ingestion rate
+- Required-field completeness
+- Duplicate precision and recall on a labeled sample
+- Correction reports per 100 displayed events
+- Median time from source publication to availability in HoosRadar
+
+### Engineering metrics
+
+- Search latency and error rate
+- Ingestion duration and failure rate
+- Critical-path end-to-end test stability
+- Mean time to detect and recover from a stale source
+- Deployment and restore success rate
+
+Metrics must be reported with timeframe, sample size, environment, and method.
+Vanity metrics and invented resume numbers are not acceptable.
+
+## 14. Risks and mitigations
+
+| Risk | Mitigation |
+| --- | --- |
+| Source format changes | Isolated parsers, fixtures, freshness alerts, and fast source disablement |
+| Collection is disallowed | Review terms first, prefer feeds/APIs, document ownership, honor removal requests |
+| Incorrect event details | Preserve source links, show freshness, avoid unsupported inference, accept reports |
+| Duplicate or conflicting records | Retain provenance, use reversible merges, measure against labeled examples |
+| Scope expands too quickly | Treat the MVP list as a boundary and require evidence before post-MVP work |
+| No real users | Interview students early and test milestone 3 before personalization |
+| Free hosting limitations | Keep deployment portable and document a complete local demonstration path |
+| AI becomes the product rather than a tool | Establish strong conventional search and measurable baselines first |
+| Student cannot explain the system | Maintain decision records, architecture notes, and regular code walkthroughs |
+
+## 15. Autonomous working agreement
+
+When instructed to continue or “go,” implementation should proceed through the
+next unblocked roadmap item using these rules:
+
+1. Inspect repository instructions and current state before editing.
+2. Keep one clearly defined milestone and acceptance criteria in progress.
+3. Prefer the simplest reversible design that meets current requirements.
+4. Add tests and documentation with each behavior change.
+5. Run the relevant quality checks before committing.
+6. Commit coherent changes with descriptive messages and create a pull request.
+7. Record important decisions, assumptions, and measurements in the repository.
+8. Do not fabricate data, users, performance results, or resume claims.
+
+Work must stop and request owner input before:
+
+- Spending money or provisioning a paid service.
+- Accepting legal terms on the owner's behalf.
+- Using private UVA data or credentials.
+- Publishing personal information.
+- Making an irreversible data or infrastructure change.
+- Changing the core product audience or MVP boundary.
+- Deploying publicly unless standing deployment permission has been given.
+
+Adding a well-maintained free dependency, refactoring internal code, choosing
+test fixtures, and making reversible implementation decisions do not require
+approval unless repository instructions say otherwise.
+
+## 16. Immediate next actions
+
+1. Interview five students using the same short discovery script.
+2. Inventory candidate event sources and complete the source-policy checklist
+   for each one.
+3. Decide whether the first demonstration should optimize for local development
+   or immediate public deployment.
+4. Select the initial stack through a short comparison and architecture decision
+   record.
+5. Convert Milestone 1 into small issues with explicit acceptance criteria.
+6. Build the walking skeleton before integrating a live source.
+
+The first implementation task should be the walking skeleton with seeded data,
+because it validates the full application path without coupling early progress
+to an unstable external source.
