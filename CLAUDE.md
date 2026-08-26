@@ -1,6 +1,6 @@
 # CLAUDE.md — Working Guide for This Repo
 
-Full detail lives in `overview` at the repo root. This file is the working
+Full detail lives in `OVERVIEW.md` at the repo root. This file is the working
 summary: what we're building, the guardrails, and what counts as a
 green/red flag while building it.
 
@@ -46,11 +46,11 @@ original source and a visible "last checked" timestamp on every event.
    real demand.
 6. Documentation + evaluation — write-up, diagrams, measured results.
 
-Exit criteria and non-goals per milestone are in `overview`.
+Exit criteria and non-goals per milestone are in `OVERVIEW.md`.
 
 ## Green flags — keep doing these
 
-- Treat the MVP list in `overview` as a hard boundary; require evidence
+- Treat the MVP list in `OVERVIEW.md` as a hard boundary; require evidence
   before adding anything past it.
 - Every behavior change ships with tests and a doc/comment update if it
   changes how something is used.
