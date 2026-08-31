@@ -1,0 +1,50 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Research data — the interview guide forbids committing raw notes
+docs/discovery/notes/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+vendor/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Build and tool output
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+.cache/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Local database and ingestion scratch
+*.sqlite
+*.sqlite3
+*.dump
+tmp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
