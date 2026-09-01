@@ -165,14 +165,22 @@ and an event naturally aging out.
 
 ### Administration
 
-The initial administration surface may be a protected command-line tool or
-internal page. It must support:
+The initial administration surface is a protected command-line tool. A web
+page may replace it later, but the CLI is the plan of record: it is the
+cheapest thing that satisfies every requirement below and needs no
+authentication surface of its own.
 
-- Viewing source health and recent ingestion runs.
-- Disabling a failing source.
-- Reprocessing a stored fixture or payload.
-- Reviewing likely duplicate groups.
-- Marking corrections without silently losing imported provenance.
+| Capability | Milestone |
+| --- | --- |
+| Viewing source health and recent ingestion runs | 2 |
+| Disabling a failing source | 2 |
+| Reprocessing a stored fixture or payload | 2 |
+| Reviewing likely duplicate groups | 3 |
+| Marking corrections without silently losing imported provenance | 3 |
+
+The first three are assigned to Milestone 2 because that milestone's failure
+handling depends on them; the last two to Milestone 3, which is where
+deduplication and corrections arrive.
 
 ## 7. Quality attributes
 
@@ -327,6 +335,13 @@ MVP scope, documented architecture, and prioritized backlog.
 
 **Exit criteria:** a new contributor can follow the README, start the system,
 view seeded events, run all checks, and understand the architecture.
+
+**Sequencing:** this milestone runs *in parallel* with Milestone 0, not after
+it. Nothing here depends on a data source or on an interview finding — it is
+scaffolding over seeded data. Only Milestone 2 is gated on the source-vetting
+half of Milestone 0, and only MVP scope changes are gated on the interviews.
+Treating discovery as a blocker for the skeleton would stall the project behind
+scheduling five students.
 
 ### Milestone 2: first ingestion path
 

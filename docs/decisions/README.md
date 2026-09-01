@@ -16,7 +16,12 @@ ADR-NNNN`.
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| _none yet_ | | |
+| [0001](0001-event-schema-and-lifecycle.md) | Event schema and ingestion lifecycle | Proposed |
+| [0002](0002-imported-content-sanitization.md) | Sanitizing imported content | Proposed |
+
+Both are **Proposed**, not Accepted: they are drafted with a recommendation and
+its reasoning so the decision can be reviewed and changed, not rubber-stamped.
+Mark them Accepted once reviewed.
 
 ## Records currently owed
 
@@ -25,11 +30,12 @@ blocking Milestone 2:
 
 1. **Stack and hosting** — language/framework, CI provider, deployment target,
    what triggers a scheduled ingestion run, the reference dataset used for
-   performance measurement, and the backup/restore story.
-2. **Event schema and lifecycle** — recurring events, event status states and
-   the thresholds between them, all-day/multi-day/TBD times, and the
-   idempotency key used for upserts.
-3. **Organization identity** — whether organizations are a first-class entity
+   performance measurement, and the backup/restore story. *Still owed; blocked
+   on choosing a stack.*
+2. **Organization identity** — whether organizations are a first-class entity
    with aliases; required before deduplication uses organization as a match key.
-4. **Imported-content sanitization** — the HTML tag and attribute allowlist
-   applied to source-provided content before rendering.
+   *Still owed; follows ADR-0001.*
+
+Drafted: event schema and lifecycle (ADR-0001) and imported-content
+sanitization (ADR-0002). Both were written first because they are independent
+of the stack, so they did not need to wait on it.

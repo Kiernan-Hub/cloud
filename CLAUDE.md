@@ -12,8 +12,11 @@ original source and a visible "last checked" timestamp on every event.
 
 - Not a social network, not a chatbot, not a scraper for sources that
   disallow it.
-- MVP = browse/search/filter events, see where each one came from, export
-  to a calendar file, bookmark anonymously.
+- MVP, in outline: browse/search/filter events, see where each one came
+  from, export to a calendar file, bookmark anonymously. **`OVERVIEW.md` §5
+  is the normative list** — it is the hard boundary, and it additionally
+  requires two data sources, a scheduled ingestion job, tests, and docs.
+  Check it there rather than against this summary.
 - Accounts, recommendations, and notifications are post-MVP — only pursued
   if real usage shows demand for them.
 
