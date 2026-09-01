@@ -14,6 +14,7 @@ seeded data (Milestone 1); setup and run instructions will land with it.
 | --- | --- |
 | [`OVERVIEW.md`](OVERVIEW.md) | Product scope, requirements, architecture, roadmap, and the working agreement |
 | [`CLAUDE.md`](CLAUDE.md) | Working summary and guardrails for contributors and coding agents |
+| [`docs/HANDBOOK.md`](docs/HANDBOOK.md) | Study reference: the whole project, the reasoning, and the vocabulary |
 | [`docs/discovery/`](docs/discovery/) | Student interview guide for Milestone 0 |
 | [`docs/decisions/`](docs/decisions/) | Architecture decision records |
 | [`docs/sources/`](docs/sources/) | Per-source policy records; required before a source is integrated |
