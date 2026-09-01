@@ -15,8 +15,26 @@ date and reason recorded; the record is kept, not deleted.
 "Approved" means the repository owner has reviewed the completed record. There
 is no other approval process.
 
+## Candidate inventory
+
+[`candidate-inventory.md`](candidate-inventory.md) is the desk research behind
+the table below: who owns each calendar, which platform it runs on, and the
+commands to verify each one. It was compiled without network access to
+`virginia.edu`, so its technical claims are explicitly marked unverified —
+read its opening caveat before relying on anything in it.
+
 ## Index
 
 | Source | Slug | Method | Status |
 | --- | --- | --- | --- |
-| _none yet_ | | | |
+| Hoos Involved (Anthology Engage) | `hoosinvolved-engage` | public RSS / iCal feed (unverified) | candidate |
+| Hoos Doing What (Student Affairs) | `studentaffairs-events` | unknown (unverified) | candidate |
+| Student Engagement calendar | `studentengagement-calendar` | unknown | candidate |
+| UVA Arts | `uva-arts` | unknown | candidate |
+| UVA Global | `uva-global` | unknown | candidate |
+| Community Partnerships | `community-partnerships` | unknown | candidate |
+| Office of Major Events | `major-events` | unknown | candidate |
+| UVA Library | `uva-library` | unknown | candidate |
+
+No source is approved. Nothing in this table may be integrated until its record
+is completed and reviewed.
