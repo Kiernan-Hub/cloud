@@ -502,6 +502,7 @@ explicitly labeled as targets rather than results.
 
 | Path | What it is |
 | --- | --- |
+| `NEXT_STEPS.md` | Status and exact next steps — the short doc, read this before this one |
 | `OVERVIEW.md` | The authoritative plan — scope, requirements, architecture, roadmap |
 | `CLAUDE.md` | Working guardrails; green flags, red flags, stop-and-ask list |
 | `README.md` | Entry point, document map, and the actual setup/run instructions |

@@ -9,6 +9,9 @@ run end-to-end on seeded demo data — there is no live source integrated yet
 (that is Milestone 2). See [`docs/decisions/`](docs/decisions/) for the
 architecture behind what's here.
 
+**Picking this back up? Read [`NEXT_STEPS.md`](NEXT_STEPS.md) first** — status
+and the exact next steps, kept short on purpose.
+
 ## Setup
 
 Requires Node.js 22+ and a PostgreSQL 16 server.
@@ -91,6 +94,7 @@ manually deleted output directory.
 
 | Document | What it is |
 | --- | --- |
+| [`NEXT_STEPS.md`](NEXT_STEPS.md) | Status and exact next steps — read this first when resuming work |
 | [`OVERVIEW.md`](OVERVIEW.md) | Product scope, requirements, architecture, roadmap, and the working agreement |
 | [`CLAUDE.md`](CLAUDE.md) | Working summary and guardrails for contributors and coding agents |
 | [`docs/HANDBOOK.md`](docs/HANDBOOK.md) | Study reference: the whole project, the reasoning, and the vocabulary |
