@@ -96,6 +96,8 @@ later release, they may suggest corrections or submit a source for review.
 2. If sources disagree or information is stale, the interface communicates
    that limitation.
 3. The user can report an error without directly overwriting imported data.
+   For the MVP this is a prefilled email link, not an in-app form; a real
+   reporting endpoint with rate limiting and moderation is post-MVP.
 
 ## 5. Minimum viable product
 
@@ -110,6 +112,10 @@ The MVP is complete when it includes:
 - A normalized event model with provenance and duplicate handling.
 - Calendar export using the iCalendar format.
 - Basic anonymous bookmarks stored in the browser.
+- A "report a problem" link on each event, opening a prefilled email with
+  the event identifier. This satisfies the verification journey in §4 and the
+  correction metric in §13 without a public write endpoint, and it preserves
+  the rule that imported data is never overwritten by a report.
 - Empty, loading, stale-data, and failure states.
 - Automated tests for critical ingestion and discovery paths.
 - Local setup, deployment, operations, and data-source documentation.
@@ -360,6 +366,7 @@ depend on the network, and a failed source does not remove valid events.
 - Implement search, filters, pagination, and shareable URLs.
 - Introduce deterministic deduplication and a review mechanism.
 - Add anonymous bookmarks and calendar export.
+- Add the "report a problem" mailto link to event pages.
 - Complete responsive, accessible empty/loading/error states.
 
 **Exit criteria:** all stated MVP journeys work on mobile and desktop, critical
