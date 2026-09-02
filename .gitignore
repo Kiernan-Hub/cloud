@@ -1,0 +1,19 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor/tooling
+.idea/
+.vscode/
+*.swp
+
+# Local scratch
+/tmp/
+/scratch/
