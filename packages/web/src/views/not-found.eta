@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not found · HoosRadar</title>
+  <%~ include("partials/head", {}) %>
+</head>
+<body>
+  <%~ include("partials/nav", { query: "" }) %>
+  <main>
+    <h1>Not found</h1>
+    <p class="empty-state">That page or event doesn&rsquo;t exist. <a href="/">Back to upcoming events</a>.</p>
+  </main>
+</body>
+</html>

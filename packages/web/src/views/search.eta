@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title><%= it.query ? `Search: ${it.query}` : "Search" %> · HoosRadar</title>
+  <%~ include("partials/head", {}) %>
+</head>
+<body>
+  <%~ include("partials/nav", { query: it.query }) %>
+  <main>
+    <h1><% if (it.query) { %>Results for &ldquo;<%= it.query %>&rdquo;<% } else { %>Search<% } %></h1>
+
+    <% if (!it.query) { %>
+      <p class="empty-state">Enter a search above to find events by title, organization, or venue.</p>
+    <% } else if (it.events.length === 0) { %>
+      <p class="empty-state">No events matched &ldquo;<%= it.query %>&rdquo;.</p>
+    <% } else { %>
+      <ul class="event-list">
+        <% it.events.forEach(function(event) { %>
+          <%~ include("partials/event-card", { event: event, formatEventWhen: it.formatEventWhen, formatLastChecked: it.formatLastChecked }) %>
+        <% }) %>
+      </ul>
+    <% } %>
+  </main>
+</body>
+</html>

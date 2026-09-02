@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Upcoming events · HoosRadar</title>
+  <%~ include("partials/head", {}) %>
+</head>
+<body>
+  <%~ include("partials/nav", { query: "" }) %>
+  <main>
+    <h1>Upcoming events</h1>
+
+    <% if (it.events.length === 0) { %>
+      <p class="empty-state">
+        No upcoming events yet. This is seeded demo data for the walking skeleton —
+        see <code>docs/HANDBOOK.md</code> for how to load it.
+      </p>
+    <% } else { %>
+      <ul class="event-list">
+        <% it.events.forEach(function(event) { %>
+          <%~ include("partials/event-card", { event: event, formatEventWhen: it.formatEventWhen, formatLastChecked: it.formatLastChecked }) %>
+        <% }) %>
+      </ul>
+      <% if (it.nextCursor) { %>
+        <p class="pagination">
+          <a href="/?cursor=<%= encodeURIComponent(it.nextCursor) %>">More events &rarr;</a>
+        </p>
+      <% } %>
+    <% } %>
+  </main>
+</body>
+</html>

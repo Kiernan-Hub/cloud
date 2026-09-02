@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title><%= it.event.title %> · HoosRadar</title>
+  <%~ include("partials/head", {}) %>
+</head>
+<body>
+  <%~ include("partials/nav", { query: "" }) %>
+  <main class="event-detail">
+    <p><a href="/">&larr; Upcoming events</a></p>
+
+    <% if (it.event.status === "cancelled_by_source") { %>
+      <p class="status-banner status-cancelled">The source lists this event as cancelled.</p>
+    <% } else if (it.event.status === "missing_from_source") { %>
+      <p class="status-banner status-missing">
+        No longer listed at the source as of the last check. This does not necessarily mean it was
+        cancelled — see <code>docs/decisions/0001-event-schema-and-lifecycle.md</code>.
+      </p>
+    <% } %>
+
+    <p class="event-when"><%= it.formatEventWhen(it.event) %></p>
+    <h1 class="event-title"><%= it.event.title %></h1>
+
+    <p class="event-meta">
+      <% if (it.event.venueName) { %><span class="event-venue"><%= it.event.venueName %></span><% } %>
+      <% if (it.event.organizationName) { %><span class="event-org">Hosted by <%= it.event.organizationName %></span><% } %>
+      <% if (it.event.costText) { %><span class="event-cost"><%= it.event.costText %></span><% } %>
+    </p>
+
+    <% if (it.event.categories.length) { %>
+    <p class="event-categories">
+      <% it.event.categories.forEach(function(category) { %><span class="chip"><%= category %></span><% }) %>
+    </p>
+    <% } %>
+
+    <% if (it.event.descriptionHtml) { %>
+      <div class="event-description"><%~ it.event.descriptionHtml %></div>
+    <% } %>
+
+    <% if (it.event.accessibilityText) { %>
+      <p class="event-accessibility"><strong>Accessibility:</strong> <%= it.event.accessibilityText %></p>
+    <% } %>
+
+    <div class="provenance">
+      <p>
+        <a href="<%= it.event.sourceUrl %>" rel="noopener noreferrer nofollow" target="_blank">
+          View original source &rarr;
+        </a>
+      </p>
+      <p class="event-freshness"><%= it.formatLastChecked(it.event.lastSyncedAt) %></p>
+      <p>
+        <a class="report-link"
+           href="mailto:hoosradar-reports@example.org?subject=<%= encodeURIComponent('Report a problem: ' + it.event.title) %>&body=<%= encodeURIComponent('Event ID: ' + it.event.id + '\n\nWhat looks wrong?\n') %>">
+          Report a problem with this event
+        </a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>

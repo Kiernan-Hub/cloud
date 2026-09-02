@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# OVERVIEW.md section 12: live-source checks run on a separate schedule, never
+# here — an external site being flaky must not make an ordinary pull request
+# flaky. Everything in this workflow runs against fixtures and a local
+# Postgres service container, never the network.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hoosradar
+          POSTGRES_PASSWORD: hoosradar_ci
+          POSTGRES_DB: hoosradar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://hoosradar:hoosradar_ci@localhost:5432/hoosradar_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint and format check
+        run: npm run lint
+
+      - name: Build (topological, type-checks every package)
+        run: npm run build
+
+      - name: Apply migrations
+        run: npm run migrate
+
+      - name: Test
+        run: npm test

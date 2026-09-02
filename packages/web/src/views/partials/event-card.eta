@@ -1,0 +1,16 @@
+<li class="event-card">
+  <a class="event-card-link" href="/events/<%= it.event.id %>">
+    <p class="event-when"><%= it.formatEventWhen(it.event) %></p>
+    <h3 class="event-title"><%= it.event.title %></h3>
+    <p class="event-meta">
+      <% if (it.event.venueName) { %><span class="event-venue"><%= it.event.venueName %></span><% } %>
+      <% if (it.event.organizationName) { %><span class="event-org"><%= it.event.organizationName %></span><% } %>
+    </p>
+    <% if (it.event.categories.length) { %>
+    <p class="event-categories">
+      <% it.event.categories.forEach(function(category) { %><span class="chip"><%= category %></span><% }) %>
+    </p>
+    <% } %>
+    <p class="event-freshness"><%= it.formatLastChecked(it.event.lastSyncedAt) %></p>
+  </a>
+</li>

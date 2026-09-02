@@ -1,0 +1,8 @@
+<header class="site-header">
+  <a class="brand" href="/">HoosRadar</a>
+  <form class="search-form" action="/search" method="get" role="search">
+    <label class="visually-hidden" for="q">Search events</label>
+    <input id="q" name="q" type="search" placeholder="Search events&hellip;" value="<%= it.query %>" />
+    <button type="submit">Search</button>
+  </form>
+</header>

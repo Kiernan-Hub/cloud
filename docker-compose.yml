@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: hoosradar
+      POSTGRES_PASSWORD: hoosradar_dev
+      POSTGRES_DB: hoosradar_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - hoosradar-postgres:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hoosradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hoosradar-postgres:

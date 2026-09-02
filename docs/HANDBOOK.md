@@ -4,7 +4,7 @@ A single place to re-load the whole project: what it is, why each decision was
 made, where it stands, and the vocabulary to discuss it. Written to be read
 start to finish in about half an hour.
 
-- **Last updated:** 2026-09-01
+- **Last updated:** 2026-09-02
 - **Canonical source:** this file. `OVERVIEW.md` is the authoritative plan; this
   handbook explains and connects it.
 
@@ -41,25 +41,29 @@ collection.
 
 ## 2. Honest status
 
-**There is no application code yet.** The repository contains planning
-documents only. This matters for how you describe the project: the work so far
-is design, research, and scope discipline, and claiming otherwise would violate
-the project's own rule against unsupported claims.
+**The walking skeleton exists and runs.** App, worker, and database run
+end-to-end on seeded demo data — no live source is integrated yet, and there
+is still no deployment. This matters for how you describe the project: it is
+accurate to say "a working full-stack skeleton with a real Postgres schema,"
+not "a finished product" or "an app pulling real UVA events."
 
 | Area | State |
 | --- | --- |
-| Milestone | 0 (discovery), in progress |
-| Application code | None |
+| Milestone | 1 (walking skeleton) built; Milestone 2 (first real source) next |
+| Application code | 4 packages: core, db, web, worker — see §8 |
+| Automated tests | 43, all passing; CI runs them on every pull request |
 | Student interviews | 0 of 5 conducted |
-| Architecture decision records | 0 written; directory and template exist |
-| Candidate sources inventoried | 8 |
-| Sources approved | 0 |
-| Stack chosen | No — proposed only |
-| Deployment | None |
+| Architecture decision records | 3 written (Proposed): schema/lifecycle, sanitization, stack |
+| Candidate sources inventoried | 8; one (Hoos Involved) technically verified against a real feed pull |
+| Sources approved | 0 — technical verification is not the same as owner approval |
+| Stack chosen | Yes — TypeScript end to end, see ADR-0003 |
+| Deployment | None — Milestone 4 |
 
-What *has* been produced: the full plan (`OVERVIEW.md`), working guardrails
-(`CLAUDE.md`), a discovery interview protocol, a plan audit that found ~30
-issues, and a researched inventory of candidate data sources.
+What has been produced: the full plan (`OVERVIEW.md`), working guardrails
+(`CLAUDE.md`), a discovery interview protocol, a plan audit, a researched and
+partly-verified inventory of candidate data sources, three decision records,
+and — new since the audit — a running walking skeleton with a tested schema,
+a server-rendered web app, and a database-backed job worker.
 
 ## 3. The problem and why it's real
 
@@ -290,33 +294,42 @@ event-handler attributes, `srcdoc`.
 
 ## 8. Tools: what's actually in use vs. proposed
 
+The stack is decided now (ADR-0003) and the walking skeleton runs on it — this
+section changed the most since the plan audit.
+
 ### Actually in use today
+
+| Package | Role |
+| --- | --- |
+| `packages/core` | Event model, Zod schemas, the ADR-0001 natural key and fingerprint, ADR-0002 sanitization — no I/O |
+| `packages/db` | `node-pg-migrate` migrations, a hand-written SQL query layer (no ORM — ADR-0003), seed data |
+| `packages/web` | Fastify + Eta templates, server-rendered, no client JS required |
+| `packages/worker` | The `SELECT ... FOR UPDATE SKIP LOCKED` job queue and poll loop from OVERVIEW.md §8 |
 
 | Tool | Role |
 | --- | --- |
 | Git + GitHub | Version control, branches, pull requests |
 | Claude Code | Agentic development in remote cloud containers |
+| npm workspaces | Monorepo; TypeScript project references build packages in dependency order |
+| PostgreSQL 16 | Local via `docker-compose.yml`, or a native install — both documented in the README |
+| Vitest | 43 tests, real database integration tests, not mocks |
+| Biome | Lint + format, one config, zero separate tools |
+| GitHub Actions | CI on every pull request — lint, build (which typechecks), migrate, test |
 | Markdown in-repo | All planning, decisions, and research |
-| ADR practice | Architecture decision records — template exists, none written |
+| ADR practice | Three records written (Proposed) — schema/lifecycle, sanitization, stack |
 | `.gitignore` | Enforces the no-secrets and no-raw-interview-notes rules mechanically |
 
-### Proposed, not yet decided
+### Still proposed / deferred
 
-| Layer | Proposal | Status |
-| --- | --- | --- |
-| Web client | Server-rendered TypeScript, progressive enhancement | Proposed |
-| API | Typed endpoints for events, filters, bookmarks, source status | Proposed |
-| Database | PostgreSQL — records, ingestion state, full-text search | Proposed |
-| Worker | Separate process for collection, parsing, dedup, indexing | Proposed |
-| Jobs | Database-backed; queue only if measured need | Proposed |
-| Object storage | Optional, for permitted raw payloads | Deliberately deferred |
-| Monitoring | Structured logs, error reporting, freshness metrics | Proposed |
-| CI | Format, lint, typecheck, unit tests | Deferred to Milestone 1 |
-| Hosting | Undecided; free or low-cost tier | Open |
+| Layer | Status |
+| --- | --- |
+| `packages/ingest` — real source fetching and parsing | Not started; Milestone 2 |
+| Object storage for raw payloads | Deliberately deferred — Postgres is enough at this scale |
+| Monitoring beyond structured logs | Proposed |
+| Hosting | Deliberately deferred to Milestone 4 in ADR-0003 — the skeleton runs entirely locally |
 
-**Say "proposed," not "chosen."** Presenting an undecided stack as decided is
-the kind of thing that unravels under one follow-up question, and "I haven't
-committed yet because the spike hasn't happened" is a perfectly good answer.
+**Say "proposed," not "chosen"** for anything still in this second table —
+that distinction is what survives a follow-up question.
 
 ### Candidate data sources
 
@@ -357,23 +370,36 @@ well-tested aggregator is a good outcome, not a failure.
 
 ## 10. Open decisions
 
-Nothing here is decided. These are the four records that block Milestone 2, in
-order:
+Three of the four records that blocked Milestone 2 are written — all status
+**Proposed**, meaning drafted with reasoning and ready for review, not yet
+formally accepted:
 
-1. **Stack and hosting** — language and framework, CI provider, deployment
-   target, what actually triggers a scheduled run (in-process scheduler vs.
-   platform cron — free tiers suspend idle workers, which breaks the former),
-   the reference dataset for performance measurement, and the backup story.
-2. **Event schema and lifecycle** — recurrence, status states and thresholds,
-   all-day/multi-day/TBD times, and the idempotency key.
-3. **Organization identity** — first-class entity with aliases, or drop
-   organization from the dedup match.
-4. **Imported-content sanitization** — the HTML allowlist.
+- **ADR-0001, event schema and lifecycle** — recurrence expansion, the status
+  enum and its three-run threshold, all-day/multi-day/TBD times, the natural
+  key. Checked against a real Hoos Involved feed pull; the addendum records
+  what that confirmed and what it left untested (see §7).
+- **ADR-0002, imported-content sanitization** — the HTML allowlist, applied
+  on write. Implemented and tested against the hostile fixture set in §7.
+- **ADR-0003, stack and hosting** — TypeScript end to end, npm workspaces,
+  Fastify, `pg` with hand-written SQL, database-backed jobs. Hosting itself
+  stays deliberately deferred to Milestone 4 inside this same record.
 
-Also unresolved, from the plan audit: whether the seeded demo source counts
-toward the MVP's "two sources"; whether error reporting is in the MVP (it's
-currently a user journey and a metric but not a feature); and which milestone
-owns the admin surface.
+Still open:
+
+- **Organization identity** — first-class entity with aliases, or drop
+  organization from the dedup match. Not urgent; it doesn't bite until
+  Milestone 3's deduplication work.
+- Whether the seeded demo source counts toward the MVP's "two sources";
+  whether the admin surface (assigned to Milestones 2–3 in `OVERVIEW.md`) is
+  a CLI, as recommended, or something else.
+- Two real bugs the build itself surfaced and fixed, worth knowing the shape
+  of even though they're resolved: Postgres never treats `NULL = NULL` as
+  equal, so the natural key's uniqueness needed `NULLS NOT DISTINCT` partial
+  indexes rather than a plain constraint — a plain one would have silently
+  let every re-imported non-recurring event duplicate. And the documented
+  setup flow only migrated `hoosradar_dev`, not the separate `hoosradar_test`
+  database the test suite needs — found by literally following the README
+  from a clean database, fixed by having the test suite migrate itself.
 
 ## 11. Known risks
 
@@ -464,8 +490,11 @@ Some framings that hold up:
   schema decisions that get expensive after the first import" is a good answer to
   a question about catching problems early.
 
-Two things to avoid. **Don't imply it's built** — it isn't, and one follow-up
-question will surface that. **Don't cite numbers you haven't measured**; the
+Two things to avoid. **Don't overstate what's built** — a working local
+skeleton with a tested schema is real and worth saying plainly, but it is not
+a deployed product and it ingests no live source yet; one follow-up question
+("so it's live?") will surface the gap if the phrasing implied otherwise.
+**Don't cite numbers you haven't measured**; the
 project's own rules forbid it, and the performance targets in the plan are
 explicitly labeled as targets rather than results.
 
@@ -475,12 +504,14 @@ explicitly labeled as targets rather than results.
 | --- | --- |
 | `OVERVIEW.md` | The authoritative plan — scope, requirements, architecture, roadmap |
 | `CLAUDE.md` | Working guardrails; green flags, red flags, stop-and-ask list |
-| `README.md` | Entry point and document map |
+| `README.md` | Entry point, document map, and the actual setup/run instructions |
 | `docs/HANDBOOK.md` | This file |
 | `docs/reviews/2026-08-31-plan-audit.md` | Audit of the plan; ~30 findings by severity |
 | `docs/discovery/student-interview-guide.md` | Interview protocol for Milestone 0 |
-| `docs/decisions/` | ADR index and template; no records written yet |
-| `docs/sources/` | Source policy records and the candidate inventory |
+| `docs/decisions/` | Three ADRs (Proposed), plus the index and template |
+| `docs/sources/` | Source policy records, the candidate inventory, and the verified Hoos Involved fixture |
+| `packages/core`, `db`, `web`, `worker` | The walking skeleton — see §8 |
+| `docker-compose.yml`, `.github/workflows/ci.yml` | Local Postgres, and the CI pipeline that runs on every pull request |
 
 ### The three rules that shape everything
 
