@@ -27,7 +27,7 @@ read its opening caveat before relying on anything in it.
 
 | Source | Slug | Method | Status |
 | --- | --- | --- | --- |
-| Hoos Involved (Anthology Engage) | `hoosinvolved-engage` | public RSS / iCal feed (unverified) | candidate |
+| [Hoos Involved (Anthology Engage)](hoosinvolved-engage.md) | `hoosinvolved-engage` | public iCal feed, confirmed live | candidate, technically verified |
 | Hoos Doing What (Student Affairs) | `studentaffairs-events` | unknown (unverified) | candidate |
 | Student Engagement calendar | `studentengagement-calendar` | unknown | candidate |
 | UVA Arts | `uva-arts` | unknown | candidate |

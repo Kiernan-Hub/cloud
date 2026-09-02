@@ -162,3 +162,27 @@ this record to challenge hardest before accepting it.
   announced further out, or storage growth becoming a real cost.
 - Measured evidence that `N = 3` is too slow to reflect genuine removals, or too
   fast and hiding events during flaky-but-successful runs.
+
+## Addendum: checked against a real feed (2026-09-02)
+
+A real pull of the Hoos Involved iCal feed (63 events; see
+`docs/sources/hoosinvolved-engage.md` and its fixture) tested the decisions
+above against live data rather than assumption.
+
+**Confirmed, and load-bearing:** the feed carries no `TZID` at all — every
+timestamp is a bare UTC instant. Storing `start_tz` separately (§3) is not
+optional polish; without it there is no way to recover local time, and a naive
+`DTSTART date = DTEND date` same-day check misclassifies ordinary evening
+events that cross UTC midnight as multi-day. That bug is real, not
+hypothetical, in this exact feed.
+
+**Confirmed:** `UID` is a stable, full URL per event, and unique across all 63
+— the primary natural key in §4 is sufficient for this source with no need for
+the content-fingerprint fallback.
+
+**Not exercised by this sample:** zero `RRULE`, `RECURRENCE-ID`, or `EXDATE`
+appeared in 63 events — either none were in this window, or Engage expands
+recurring series server-side before publishing. §1's expansion strategy is
+unfalsified but also untested by this pull; re-check against a longer window,
+and treat a source that ships raw `RRULE` (an arts or library calendar is more
+likely to) as the real test.

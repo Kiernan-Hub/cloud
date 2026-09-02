@@ -58,32 +58,40 @@ testable — see finding D1 in the plan audit.
 | Owner | UVA Student Engagement, Division of Student Affairs [searched] |
 | Public URL | `hoosinvolved.virginia.edu` [searched] |
 | Underlying platform | Anthology Engage, formerly Campus Labs, at `virginia.campuslabs.com/engage/events` [searched] |
-| Method | Public Events RSS feed and public Events iCal feed [searched] |
+| Method | Public Events RSS feed and public Events iCal feed — **[confirmed live 2026-09-02]**, both linked at the bottom of the public events page |
 | Also available | Engage REST API v2/v3, `/events` endpoint — **contract-gated** [searched] |
-| Scale | Reported as 995+ organizations and ~12,000 events/year [searched, unverified — do not cite this number anywhere until confirmed] |
-| Status | **candidate** |
+| Scale | Page showed "81" events in the current window at capture time; the pulled iCal feed carried 63 for the same window [confirmed, discrepancy unexplained — see the source record] |
+| Status | **candidate, technically verified** — see `hoosinvolved-engage.md` |
 
-Why it leads: Anthology's own documentation states that Engage "offers public
-Events and public News data feeds through RSS as well as an additional public
-Events data feed through iCal," configurable from the Data Sharing page in a
-campus's Engage admin area [searched]. That is exactly the sanctioned,
-owner-controlled collection method `OVERVIEW.md` §9 says to prefer, and it
-avoids scraping entirely. It is also the broadest single source found — student
-org events are the bulk of what the target persona is looking for.
+Why it leads: the iCal feed is not merely documented by the vendor, it is
+**confirmed live at UVA** — a real pull on 2026-09-02 returned 63 well-formed
+events with stable, dereferenceable `UID`s (a full URL per event, e.g.
+`https://hoosinvolved.virginia.edu/event/12679563`), rich fields including
+`GEO` coordinates on about half of events and multi-valued `CATEGORIES`, and
+plain-text descriptions with no HTML to sanitize for this source. The pulled
+feed is saved as the Milestone 2 test fixture at
+`fixtures/hoosinvolved-engage-2026-09-02.ics`; full findings, including what
+this feed validated and broke in ADR-0001, are in `hoosinvolved-engage.md`.
 
-Two things to know before committing to it:
+That is exactly the sanctioned, owner-controlled collection method
+`OVERVIEW.md` §9 says to prefer, and it avoids scraping entirely. It is also
+the broadest single source found — student org events are the bulk of what the
+target persona is looking for.
 
-- **The feeds may simply be switched off.** They are admin-configurable per
-  campus, so their existence at UVA is unconfirmed. If they are off, the ask is
-  small and well-defined: UVA Student Engagement can enable the public feed in
-  Engage admin. That is a far easier conversation than requesting API
-  credentials, and it is the first thing to check.
-- **This platform changed recently.** UVA moved Hoos Involved from Presence to
+What's still open before this can move to `approved` — none of it needs the
+feed pulled again, all of it needs a browser session with `virginia.edu`
+access:
+
+- **The owner contact and a terms review have not been done.** The feed being
+  live does not by itself mean this specific collection is authorized; §9
+  requires reviewing terms before integrating, not after.
+- **`robots.txt` and conditional-request support (`ETag`/`Last-Modified`) are
+  still unverified** — this environment cannot reach `virginia.edu`. The
+  commands are in the verification section below.
+- **The platform changed recently.** UVA moved Hoos Involved from Presence to
   Engage, with student org leaders told to keep using Presence for events until
   July 2026 [searched]. A source that changed vendors within roughly the last
-  year is a source whose URL structure and feed shape are not yet settled. This
-  is precisely the risk `OVERVIEW.md` §14 mitigates with isolated parsers and
-  fixtures — worth stating in the record so nobody is surprised.
+  year is one whose URL structure and feed shape may not be fully settled yet.
 
 The Engage API is a deliberate non-starter for now: it needs a contract key,
 which means an institutional request, which is exactly the kind of thing §15
