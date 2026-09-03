@@ -18,13 +18,13 @@ anonymized notes.
 
 Record only broad segments — no names, no identifying detail.
 
-| ID | Year | Broad field | Self-reported event attendance |
-| --- | --- | --- | --- |
-| P1 | | | |
-| P2 | | | |
-| P3 | | | |
-| P4 | | | |
-| P5 | | | |
+| ID  | Year | Broad field | Self-reported event attendance |
+| --- | ---- | ----------- | ------------------------------ |
+| P1  |      |             |                                |
+| P2  |      |             |                                |
+| P3  |      |             |                                |
+| P4  |      |             |                                |
+| P5  |      |             |                                |
 
 The guide requires at least one participant who rarely attends events. Note here
 whether that was met, and if not, how it biases what follows.
@@ -37,8 +37,8 @@ supported only by stated preference should say so plainly, because that is much
 weaker evidence and should not by itself justify building anything.
 
 | Finding | Behavioral evidence | Participants | Contrary evidence | Decision |
-| --- | --- | ---: | --- | --- |
-| | | /5 | | |
+| ------- | ------------------- | -----------: | ----------------- | -------- |
+|         |                     |           /5 |                   |          |
 
 ## Answers to the research questions
 
@@ -59,8 +59,8 @@ name? This is the highest-value output of the interviews for engineering
 purposes — it turns the source inventory from guesswork into a prioritized list.
 
 | Source named | Participants naming it | Already in `docs/sources/`? |
-| --- | --- | ---: |
-| | | |
+| ------------ | ---------------------- | --------------------------: |
+|              |                        |                             |
 
 ## Scope decision
 
@@ -73,6 +73,6 @@ The discovery step is complete only when this section is answered from evidence:
 Recording "stop" is a legitimate outcome. Discovery that can only ever confirm
 the plan is not discovery.
 
-## Things the interviews did *not* answer
+## Things the interviews did _not_ answer
 
 Being explicit here prevents a gap from later being filled with assumption.

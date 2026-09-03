@@ -5,7 +5,7 @@
 
 ## Context
 
-`OVERVIEW.md` states a project goal of being able to *explain* the system, not
+`OVERVIEW.md` states a project goal of being able to _explain_ the system, not
 just run it, and lists "student cannot explain the system" as a named risk.
 Design decisions made silently in code are hard to recover later: the reasoning
 disappears and only the result remains, which makes it impossible to tell a

@@ -135,9 +135,9 @@ observations separate from interpretations.
 
 Use this decision table:
 
-| Finding | Behavioral evidence | Participants | Contrary evidence | Decision |
-| --- | --- | ---: | --- | --- |
-| Example only; replace after interviews | Example only | 0/5 | Not collected | No decision |
+| Finding                                | Behavioral evidence | Participants | Contrary evidence | Decision    |
+| -------------------------------------- | ------------------- | -----------: | ----------------- | ----------- |
+| Example only; replace after interviews | Example only        |          0/5 | Not collected     | No decision |
 
 The discovery step is complete when five consenting students have been
 interviewed with this guide and the anonymized synthesis records whether the

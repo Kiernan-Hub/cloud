@@ -7,7 +7,7 @@
 
 `OVERVIEW.md` §8 commits to a modular monolith with named internal modules, and
 `CLAUDE.md` makes "keep source-specific parsing isolated from normalization and
-storage logic" a green flag. The open question is *how* to enforce that
+storage logic" a green flag. The open question is _how_ to enforce that
 isolation.
 
 The usual answer is a workspace with one package per module. That gives real,

@@ -1,0 +1,23 @@
+# Local development only — see docs/adr/0003-hosting-and-deployment.md.
+# Only Postgres runs in Docker. The app and worker run directly via
+# `npm run dev` / `npm run worker` so stack traces and reloads stay fast.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hoosradar
+      POSTGRES_PASSWORD: hoosradar_dev
+      POSTGRES_DB: hoosradar
+    ports:
+      - "5432:5432"
+    volumes:
+      - hoosradar_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hoosradar -d hoosradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hoosradar_postgres_data:

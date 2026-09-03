@@ -24,7 +24,7 @@ Specifically:
 
 1. `docker compose up` starts Postgres. Nothing else is containerized during
    development — the app and worker run directly via `npm run dev` / `npm run
-   worker` so stack traces and reloads stay fast.
+worker` so stack traces and reloads stay fast.
 2. The app reads all configuration from environment variables with a documented
    `.env.example`. No host-specific APIs, no vendor SDKs in application code.
 3. A `Dockerfile` for the app and worker lands in Milestone 1 and is exercised

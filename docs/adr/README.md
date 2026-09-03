@@ -16,10 +16,10 @@ considered, what was chosen, and what the choice costs. ADRs are written to be
 
 ## Index
 
-| ADR | Title | Status |
-| --- | --- | --- |
-| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
-| [0002](0002-technology-stack.md) | Technology stack | Accepted |
-| [0003](0003-hosting-and-deployment.md) | Local-first development, deferred deployment | Accepted |
-| [0004](0004-job-mechanism.md) | Database-backed jobs, no queue broker | Accepted |
-| [0005](0005-module-boundaries.md) | Module boundaries by convention, not packages | Accepted |
+| ADR                                           | Title                                         | Status   |
+| --------------------------------------------- | --------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions                 | Accepted |
+| [0002](0002-technology-stack.md)              | Technology stack                              | Accepted |
+| [0003](0003-hosting-and-deployment.md)        | Local-first development, deferred deployment  | Accepted |
+| [0004](0004-job-mechanism.md)                 | Database-backed jobs, no queue broker         | Accepted |
+| [0005](0005-module-boundaries.md)             | Module boundaries by convention, not packages | Accepted |

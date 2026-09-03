@@ -33,6 +33,7 @@ strict TypeScript, ESLint, Prettier, and Vitest. Add `npm` scripts: `dev`,
 `build`, `worker`, `test`, `lint`, `typecheck`, `format`.
 
 **Acceptance:**
+
 - `npm run lint`, `npm run typecheck`, and `npm run test` all pass on a clean
   checkout with zero warnings.
 - TypeScript runs in `strict` mode with `noUncheckedIndexedAccess`.
@@ -47,6 +48,7 @@ strict TypeScript, ESLint, Prettier, and Vitest. Add `npm` scripts: `dev`,
 README.
 
 **Acceptance:**
+
 - `docker compose up -d` gives a reachable database with a documented connection
   string.
 - `.env` is gitignored; `.env.example` is committed and contains no real values.
@@ -60,6 +62,7 @@ README.
 generated migration. Add `npm run db:migrate` and `db:reset`.
 
 **Acceptance:**
+
 - Migration applies cleanly to an empty database and is idempotent to re-run.
 - The `UNIQUE (source_id, source_event_key)` constraint exists — an integration
   test asserts a duplicate insert is rejected.
@@ -77,6 +80,7 @@ generated migration. Add `npm run db:migrate` and `db:reset`.
 module. Configure the ESLint boundary rules.
 
 **Acceptance:**
+
 - A test fixture proving the rules bite: an import from `parsing/` to `lib/db`
   fails lint. (Verify manually, then remove — or keep as a lint-rule test if the
   tooling supports it.)
@@ -92,6 +96,7 @@ on a missing variable. A structured JSON logger with a `run_id` field available
 for ingestion contexts.
 
 **Acceptance:**
+
 - Starting either process with a missing required env var exits non-zero with a
   message naming the variable.
 - Log output is one JSON object per line with `level`, `time`, `msg`.
@@ -108,6 +113,7 @@ all-day event, an event with no end time, a cancelled event, one with a missing
 venue, and one that is stale (`last_synced_at` well in the past).
 
 **Acceptance:**
+
 - `npm run db:seed` is idempotent — running it twice yields the same 30 events,
   not 60. This is the first real test of the idempotency design.
 - The demo source is named so no one can mistake seeded data for real UVA events
@@ -122,6 +128,7 @@ venue, and one that is stale (`last_synced_at` well in the past).
 A route handler at `GET /api/events` returning cursor-paginated JSON.
 
 **Acceptance:**
+
 - Response includes, per event: title, start, timezone, venue, source id,
   `canonical_url`, and `last_synced_at`. Provenance is present from day one, not
   retrofitted.
@@ -139,6 +146,7 @@ event shows its source link and "last checked" timestamp. Responsive, semantic
 HTML, no client-side data fetching.
 
 **Acceptance:**
+
 - Both pages render from the real API/database — no hardcoded fixtures in the
   view layer.
 - Empty state and error state are implemented, not deferred.
@@ -155,6 +163,7 @@ with `FOR UPDATE SKIP LOCKED`, open an `ingestion_runs` row, execute a no-op
 handler, close the run. No real fetching yet.
 
 **Acceptance:**
+
 - `npm run worker` starts, ticks, and shuts down cleanly on SIGTERM (in-flight
   run marked, not orphaned in `running`).
 - Every run writes an `ingestion_runs` row with a run ID that appears in the
@@ -173,10 +182,11 @@ handler, close the run. No real fetching yet.
 are different questions and must not be conflated.
 
 **Acceptance:**
+
 - `/api/health` returns 200 only when the database is reachable; 503 otherwise.
 - `/api/health/sources` reports last successful run and staleness per source
   and returns 200 even when a source is stale (staleness is data, not an
-  outage of *this* service).
+  outage of _this_ service).
 
 ---
 
@@ -187,6 +197,7 @@ tests against a Postgres service container. Build the Dockerfile (ADR 0003) to
 prove the deployable artifact compiles.
 
 **Acceptance:**
+
 - CI passes on a pull request from a clean checkout.
 - No step reaches an external network host other than the package registry —
   `CLAUDE.md` forbids tests that depend on a live external site.
@@ -200,6 +211,7 @@ prove the deployable artifact compiles.
 with the module map and the request/ingestion flow.
 
 **Acceptance:**
+
 - A contributor with only Node and Docker installed can go from clone to seeded
   events in the browser using the README alone, with no undocumented steps.
 - Verify this by actually following it on a clean clone — not by assuming it.

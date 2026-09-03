@@ -2,7 +2,7 @@
 
 This turns the prose field list in `OVERVIEW.md` §6 into a concrete schema. The
 draft DDL lives in [`0001_initial.sql`](0001_initial.sql); this document explains
-*why* the tables are shaped this way. The DDL is a design draft — the executable
+_why_ the tables are shaped this way. The DDL is a design draft — the executable
 migration lands with Milestone 1 under the project's migration tooling.
 
 ## Design rules this schema has to satisfy
@@ -65,7 +65,7 @@ re-fetching. Three things make this safe:
 
 **One row per event per source.** This is the single most important structural
 decision in the schema, so it is worth stating plainly: a deduplicated event is
-*not* a row here. It is a group of rows (see `duplicate_groups`).
+_not_ a row here. It is a group of rows (see `duplicate_groups`).
 
 Idempotency is enforced by `UNIQUE (source_id, source_event_key)`. Ingestion
 upserts on that key. `source_event_key` is whatever the source gives us as a
@@ -76,11 +76,11 @@ this is a required part of onboarding a source, not an afterthought.
 
 The three timestamps do distinct work:
 
-| Column | Meaning |
-| --- | --- |
-| `first_seen_at` | when HoosRadar first imported this event |
-| `last_seen_at` | when the event was last *present in* a source response |
-| `last_synced_at` | when we last successfully *checked* the source |
+| Column           | Meaning                                                |
+| ---------------- | ------------------------------------------------------ |
+| `first_seen_at`  | when HoosRadar first imported this event               |
+| `last_seen_at`   | when the event was last _present in_ a source response |
+| `last_synced_at` | when we last successfully _checked_ the source         |
 
 Rule 3 above falls out of this: `last_synced_at` recent but `last_seen_at` stale
 means the event disappeared from a working source. `last_synced_at` also stale
@@ -118,7 +118,7 @@ ladder from §10 (`exact_key`, `canonical_url`, `deterministic_similarity`,
 exactly the data needed to measure precision and recall against a labeled sample
 later, so the project can report dedup quality instead of asserting it.
 
-`primary_event_id` on the group is a *display* pointer, chosen by deterministic
+`primary_event_id` on the group is a _display_ pointer, chosen by deterministic
 field-precedence rules. It is not a statement that the other rows are less real.
 
 ### `corrections`
@@ -126,7 +126,7 @@ field-precedence rules. It is not a statement that the other rows are less real.
 Reports of wrong data, from users or admins. Deliberately **not** an edit to
 `source_events`. A correction is a separate fact with its own lifecycle
 (`open` / `accepted` / `rejected`), and an accepted one changes what is
-*displayed* via an overlay — the imported value stays intact underneath. This is
+_displayed_ via an overlay — the imported value stays intact underneath. This is
 the "track corrections instead of overwriting imported data" requirement.
 
 ## Deliberate omissions at this stage

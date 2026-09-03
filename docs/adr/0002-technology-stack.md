@@ -14,8 +14,7 @@ PostgreSQL + a worker" but left the concrete choices open.
 
 Constraints that actually drive the choice:
 
-1. One deployable codebase, two processes (modular monolith + worker) — see ADR
-   0005.
+1. One deployable codebase, two processes (modular monolith + worker) — see ADR 0005.
 2. Postgres full-text search and deterministic dedup queries are core product
    logic, not incidental. Whatever we pick must not hide SQL from us.
 3. The owner is building this to learn architecture. A stack that makes the data
@@ -24,18 +23,18 @@ Constraints that actually drive the choice:
 
 ## Decision
 
-| Layer | Choice |
-| --- | --- |
-| Language | TypeScript (strict mode), Node.js 22 LTS |
-| Web + API | Next.js (App Router), server components by default |
-| Database | PostgreSQL 16 |
-| DB access / migrations | Drizzle ORM + `drizzle-kit` SQL migrations |
-| Validation | Zod, at every trust boundary (source payloads, API inputs) |
-| Unit / integration tests | Vitest |
-| End-to-end tests | Playwright |
-| Lint / format | ESLint + Prettier |
-| CI | GitHub Actions |
-| Local services | Docker Compose (Postgres only) |
+| Layer                    | Choice                                                     |
+| ------------------------ | ---------------------------------------------------------- |
+| Language                 | TypeScript (strict mode), Node.js 22 LTS                   |
+| Web + API                | Next.js (App Router), server components by default         |
+| Database                 | PostgreSQL 16                                              |
+| DB access / migrations   | Drizzle ORM + `drizzle-kit` SQL migrations                 |
+| Validation               | Zod, at every trust boundary (source payloads, API inputs) |
+| Unit / integration tests | Vitest                                                     |
+| End-to-end tests         | Playwright                                                 |
+| Lint / format            | ESLint + Prettier                                          |
+| CI                       | GitHub Actions                                             |
+| Local services           | Docker Compose (Postgres only)                             |
 
 The worker is a plain Node entrypoint (`src/worker/index.ts`) in the same
 codebase, sharing the `src/modules/*` code with the web process but started
@@ -51,7 +50,7 @@ most widely documented option in this space, which matters for a solo learner.
 day-one ergonomics, but it owns the schema definition and pushes raw SQL to the
 margins. Our two hardest problems — a `tsvector` search column with weighted
 ranking, and deterministic duplicate matching — are SQL problems. Drizzle's
-migrations *are* SQL files we write and read, so the schema stays legible and
+migrations _are_ SQL files we write and read, so the schema stays legible and
 Postgres-specific features are first-class rather than escape hatches.
 
 The cost is real: more boilerplate, and no Prisma Studio.

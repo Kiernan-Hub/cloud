@@ -23,13 +23,13 @@ more of P1/P4 (light, word-of-mouth-driven engagement) may qualify, but it
 was not asked directly. Recommend collecting year/field/involvement on any
 follow-up round.
 
-| ID | Year | Broad field | Self-reported event attendance |
-| --- | --- | --- | --- |
-| P1 | — | — | not asked |
-| P2 | — | — | not asked |
-| P3 | — | — | not asked |
-| P4 | — | — | not asked |
-| P5 | — | — | not asked |
+| ID  | Year | Broad field | Self-reported event attendance |
+| --- | ---- | ----------- | ------------------------------ |
+| P1  | —    | —           | not asked                      |
+| P2  | —    | —           | not asked                      |
+| P3  | —    | —           | not asked                      |
+| P4  | —    | —           | not asked                      |
+| P5  | —    | —           | not asked                      |
 
 ## Raw responses (paraphrased, anonymized)
 
@@ -71,14 +71,14 @@ searches only for career events; stumbles on everything else. Wants a
 
 ## Findings
 
-| Finding | Behavioral evidence | Participants | Contrary evidence | Decision |
-| --- | --- | ---: | --- | --- |
-| Discovery channel depends on event type: Instagram/word-of-mouth for social events, Handshake/email/Hoos Involved for career and club events | Each participant named a channel tied to a specific event category, from a real recent example | 5/5 | None | Design implication — see below |
-| Every missed event was a **late-information** failure, not a discovery-tool failure: friend told them after the fact, post seen after the fact, email seen after the fact | All 5 missed-event stories are the same shape — information existed but arrived too late | 5/5 | None | Strong support for a visible "when was this last checked / posted" signal and for surfacing near-term events prominently |
-| Students overwhelmingly **stumble** on events rather than search, except career events (Handshake) where active search is normal | Direct statements in Q2/Q6 for all five | 5/5 | None | Supports a strong default browse view over a search-first design |
-| Attendance decision driven by social proximity + interest fit + logistics (time/location), food as a recurring secondary factor | Stated in Q4 by all five, consistent categories | 5/5 (self-reported criteria, not observed behavior) | None | Confirms filter fields in `OVERVIEW.md` §6 (date, category, location); "who's going" is explicitly **not** something HoosRadar should try to capture (privacy/non-goal) |
-| Official channels (Handshake, email) seen as complete/accurate; flyers and Instagram posts seen as missing details (location, updates) | P2 (location unclear on flyers), P3 (trusted newest email after a room change), P5 (flyers carry less info than Handshake/email) | 3/5 | P1 said info was "always correct"; P4 raised no accuracy complaint | Supports showing source + freshness prominently, since trust already varies by channel |
-| Moderate but **not universal** appetite for a consolidated view | P2 wants one weekly view, P3 wants better filters, P5 wants a cross-source personalized feed, P4 wants visibility into word-of-mouth social events | 4/5 | **P1 explicitly said the status quo is fine** — the one participant who filters mainly by "food or interest" and only searches Handshake reported no felt pain | Real signal, not unanimous — see scope decision |
+| Finding                                                                                                                                                                   | Behavioral evidence                                                                                                                                |                                        Participants | Contrary evidence                                                                                                                                              | Decision                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discovery channel depends on event type: Instagram/word-of-mouth for social events, Handshake/email/Hoos Involved for career and club events                              | Each participant named a channel tied to a specific event category, from a real recent example                                                     |                                                 5/5 | None                                                                                                                                                           | Design implication — see below                                                                                                                                          |
+| Every missed event was a **late-information** failure, not a discovery-tool failure: friend told them after the fact, post seen after the fact, email seen after the fact | All 5 missed-event stories are the same shape — information existed but arrived too late                                                           |                                                 5/5 | None                                                                                                                                                           | Strong support for a visible "when was this last checked / posted" signal and for surfacing near-term events prominently                                                |
+| Students overwhelmingly **stumble** on events rather than search, except career events (Handshake) where active search is normal                                          | Direct statements in Q2/Q6 for all five                                                                                                            |                                                 5/5 | None                                                                                                                                                           | Supports a strong default browse view over a search-first design                                                                                                        |
+| Attendance decision driven by social proximity + interest fit + logistics (time/location), food as a recurring secondary factor                                           | Stated in Q4 by all five, consistent categories                                                                                                    | 5/5 (self-reported criteria, not observed behavior) | None                                                                                                                                                           | Confirms filter fields in `OVERVIEW.md` §6 (date, category, location); "who's going" is explicitly **not** something HoosRadar should try to capture (privacy/non-goal) |
+| Official channels (Handshake, email) seen as complete/accurate; flyers and Instagram posts seen as missing details (location, updates)                                    | P2 (location unclear on flyers), P3 (trusted newest email after a room change), P5 (flyers carry less info than Handshake/email)                   |                                                 3/5 | P1 said info was "always correct"; P4 raised no accuracy complaint                                                                                             | Supports showing source + freshness prominently, since trust already varies by channel                                                                                  |
+| Moderate but **not universal** appetite for a consolidated view                                                                                                           | P2 wants one weekly view, P3 wants better filters, P5 wants a cross-source personalized feed, P4 wants visibility into word-of-mouth social events |                                                 4/5 | **P1 explicitly said the status quo is fine** — the one participant who filters mainly by "food or interest" and only searches Handshake reported no felt pain | Real signal, not unanimous — see scope decision                                                                                                                         |
 
 ## Answers to the research questions
 
@@ -106,31 +106,31 @@ searches only for career events; stumbles on everything else. Wants a
 This is the most actionable output for engineering, and it surfaces a real
 tension worth flagging plainly.
 
-| Source named | Participants naming it | Already in `docs/sources/`? | Notes |
-| --- | --- | --- | --- |
-| Instagram (org accounts / flyers) | 4 (P2, P3, P4, and implied by P5) | No | Named most often for *social* events, but scraping Instagram is very likely disallowed by its terms — see `CLAUDE.md`'s red flag on sources without permitted collection. Needs terms review before it goes anywhere near the checklist. |
-| Word of mouth / group chats / friends | 3 (P1, P2, P4) | N/A | Not a source that can be ingested at all — there is no feed to fetch. Real signal, but not an engineering answer. |
-| Handshake | 2 (P1, P5) | No | Career events specifically. Likely UVA-authenticated / gated data — `CLAUDE.md` prohibits using private UVA data or credentials without owner approval. Needs explicit review before treating it as public. |
-| Email (org / school) | 2 (P3, P5) | No | Private communication channel, not a public source. Not ingestable as-is. |
-| Hoos Involved | 1 (P3) | No | The one channel here that looks like an actual structured, public, student-org event platform — the strongest candidate for a first real source technically, despite being the least-mentioned. |
+| Source named                          | Participants naming it            | Already in `docs/sources/`? | Notes                                                                                                                                                                                                                                    |
+| ------------------------------------- | --------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Instagram (org accounts / flyers)     | 4 (P2, P3, P4, and implied by P5) | No                          | Named most often for _social_ events, but scraping Instagram is very likely disallowed by its terms — see `CLAUDE.md`'s red flag on sources without permitted collection. Needs terms review before it goes anywhere near the checklist. |
+| Word of mouth / group chats / friends | 3 (P1, P2, P4)                    | N/A                         | Not a source that can be ingested at all — there is no feed to fetch. Real signal, but not an engineering answer.                                                                                                                        |
+| Handshake                             | 2 (P1, P5)                        | No                          | Career events specifically. Likely UVA-authenticated / gated data — `CLAUDE.md` prohibits using private UVA data or credentials without owner approval. Needs explicit review before treating it as public.                              |
+| Email (org / school)                  | 2 (P3, P5)                        | No                          | Private communication channel, not a public source. Not ingestable as-is.                                                                                                                                                                |
+| Hoos Involved                         | 1 (P3)                            | No                          | The one channel here that looks like an actual structured, public, student-org event platform — the strongest candidate for a first real source technically, despite being the least-mentioned.                                          |
 
 **The tension worth naming directly:** the two most-mentioned discovery paths
 (Instagram, word of mouth) are exactly the two hardest or least permissible to
 ingest. The one clean, plausible, publicly-structured candidate (Hoos
 Involved) was named by only one participant. This doesn't mean Hoos Involved
 is wrong — official university event platforms are usually intentionally
-public and API-friendly — but it does mean the *first* source and the
-*most-requested* source may not be the same thing, and that's worth being
+public and API-friendly — but it does mean the _first_ source and the
+_most-requested_ source may not be the same thing, and that's worth being
 honest about rather than reaching for Instagram scraping to chase the louder
 signal.
 
 ## Scope decision
 
 - [x] **Keep MVP scope as written** in `OVERVIEW.md` §5, with one refinement:
-  prioritize a strong, low-effort **browse/default view** over a search-first
-  experience, since 5/5 participants said they mostly stumble rather than
-  search. Filters (date/category/location) already in the MVP scope directly
-  answer Q4's stated decision criteria (3/5 findings above).
+      prioritize a strong, low-effort **browse/default view** over a search-first
+      experience, since 5/5 participants said they mostly stumble rather than
+      search. Filters (date/category/location) already in the MVP scope directly
+      answer Q4's stated decision criteria (3/5 findings above).
 - [ ] Change MVP scope
 - [ ] Stop
 
