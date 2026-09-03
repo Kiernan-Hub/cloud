@@ -34,10 +34,10 @@ Setup instructions land with Milestone 1 — see the
 
 | Milestone | State |
 | --- | --- |
-| 0 — Discovery and decisions | In progress: architecture decided, schema drafted. **Student interviews and source vetting still outstanding.** |
+| 0 — Discovery and decisions | In progress: architecture decided, schema drafted, 5/5 student interviews complete ([synthesis](docs/discovery/synthesis.md)). **Source vetting still outstanding.** |
 | 1 — Walking skeleton | Not started; broken into 12 issues with acceptance criteria |
 | 2–6 | Not started |
 
-Milestone 0 cannot close until five students have been interviewed and at least
-two viable data sources have been vetted. Both require real-world work that
-cannot be inferred from the repository.
+Milestone 0 cannot close until at least two viable data sources have been
+vetted against the checklist in [`docs/sources/`](docs/sources/). That
+requires reading each candidate's actual terms, which is owner work.

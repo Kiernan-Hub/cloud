@@ -14,11 +14,29 @@ Copy [`TEMPLATE.md`](TEMPLATE.md) to `<source-slug>.md` and fill it in.
 | --- | --- | --- | --- | --- |
 | _none yet_ | — | — | — | — |
 
-**Nothing has been inventoried yet.** Populating this table requires visiting
-real UVA calendars and reading their actual terms — it is owner work, not
-something to be filled in from assumption. Inventing a plausible-looking entry
-here would be worse than leaving it empty, because the whole point of the table
-is that its contents were verified.
+**Nothing has a completed checklist yet.** Populating one requires visiting the
+real source and reading its actual terms — it is owner work, not something to
+be filled in from assumption. Inventing a plausible-looking entry here would be
+worse than leaving it empty, because the whole point of the table is that its
+contents were verified.
+
+### Candidates surfaced by discovery interviews
+
+`docs/discovery/synthesis.md` (5/5 interviews complete) named the following
+channels. None of these has a checklist yet — this list is where to start
+vetting, not a pre-approval:
+
+| Named channel | Mentions | Likely eligibility |
+| --- | --- | --- |
+| Hoos Involved | 1/5 | Best candidate to check first — a university-run student-org event platform is the kind of source most likely to be public and API/feed-friendly. Unverified. |
+| Instagram (org accounts / flyers) | 4/5 | Named most often, but scraping is very likely against Instagram's terms. Do not build a parser before that is checked and cleared. |
+| Handshake | 2/5 | Likely gated behind UVA authentication — treat as private data under `CLAUDE.md` until proven otherwise; do not use credentials without explicit owner approval. |
+| Email, word of mouth / group chats | 5/5 combined | Not ingestable as a source at all — no feed exists to fetch. Real user behavior, not an engineering candidate. |
+
+The most-requested channels (Instagram, word of mouth) are the least likely to
+be usable; the most plausible technical candidate (Hoos Involved) was the
+least mentioned. Worth checking Hoos Involved's terms first regardless of
+mention count, rather than chasing the louder but likely-blocked signal.
 
 ## Vetting order
 
