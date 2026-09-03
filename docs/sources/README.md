@@ -1,0 +1,57 @@
+# Data source inventory
+
+Every source HoosRadar collects from must have a completed checklist in this
+directory **before** any parser is written for it. `CLAUDE.md` names "a source
+without a documented owner, terms, and collection method" as a red flag, and the
+`sources` table enforces the same rule in the database: a source cannot be
+enabled without a recorded `terms_reviewed_at`.
+
+Copy [`TEMPLATE.md`](TEMPLATE.md) to `<source-slug>.md` and fill it in.
+
+## Status
+
+| Source | Slug | Method | Terms reviewed | Status |
+| --- | --- | --- | --- | --- |
+| _none yet_ | — | — | — | — |
+
+**Nothing has been inventoried yet.** Populating this table requires visiting
+real UVA calendars and reading their actual terms — it is owner work, not
+something to be filled in from assumption. Inventing a plausible-looking entry
+here would be worse than leaving it empty, because the whole point of the table
+is that its contents were verified.
+
+## Vetting order
+
+Prefer sources in this order, because the earlier ones are both more reliable and
+less legally fraught:
+
+1. **Official iCalendar or RSS/Atom feeds.** Publishing a feed is an explicit
+   invitation to consume it. Cheapest to parse, most stable.
+2. **Documented public APIs.** Usually rate-limited and versioned; read the terms
+   for attribution and caching requirements.
+3. **Structured pages with machine-readable markup** (JSON-LD `Event`,
+   microdata). Fragile but honest.
+4. **HTML parsing.** Last resort. Requires an explicit robots.txt and
+   terms-of-service check, a low request rate, and a named user agent.
+
+A source that technically blocks collection, or whose terms forbid it, is not
+eligible regardless of how useful its data would be.
+
+## Rules that apply to every source
+
+- Identify the application in the user agent with a contact address.
+- Respect `robots.txt` and any documented crawl delay; never exceed the
+  requested frequency.
+- Cache and use conditional requests (`ETag`, `If-Modified-Since`) so repeat
+  polling is cheap for the source owner.
+- Retain raw payloads only where terms allow, and only for the documented window.
+- Honor a removal request immediately: set `enabled = false` with a
+  `disabled_reason`. This must not require a deploy.
+- Never collect attendee lists, private organization data, or anything behind
+  authentication.
+
+## What needs owner sign-off
+
+Per `CLAUDE.md`, accepting a source's terms on the owner's behalf is not
+something this project's automation does. Claude can *read and summarize* a
+source's terms and flag concerns; the decision to collect from it is Kiernan's.
