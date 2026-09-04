@@ -34,9 +34,14 @@ vetting, not a pre-approval:
 | Email, word of mouth / group chats | 5/5 combined | Not ingestable as a source at all — no feed exists to fetch. Real user behavior, not an engineering candidate.                                                   |
 
 The most-requested channels (Instagram, word of mouth) are the least likely to
-be usable; the most plausible technical candidate (Hoos Involved) was the
-least mentioned. Worth checking Hoos Involved's terms first regardless of
-mention count, rather than chasing the louder but likely-blocked signal.
+be usable; the most plausible technical candidates were barely mentioned.
+
+**See [vetting-findings-2026-09.md](vetting-findings-2026-09.md)** for desk
+research on which of these are actually reachable. Summary: several UVA
+calendars appear to run on Localist, whose API is documented as public and
+unauthenticated — a promising path. Handshake's terms reportedly prohibit
+scraping outright, so it is effectively closed absent a UVA partnership. Both
+findings are secondhand and still need first-hand verification.
 
 ## Vetting order
 
