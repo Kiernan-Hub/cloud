@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/lib/db/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env src/lib/db/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=.env src/lib/db/seed.ts",
+    "source:add": "tsx --env-file-if-exists=.env src/cli/add-source.ts",
+    "source:run": "tsx --env-file-if-exists=.env src/cli/run-source.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

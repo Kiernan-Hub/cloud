@@ -6,7 +6,7 @@
 import { getConfig } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
-import { claimDueSources, processSource } from "@/modules/ingestion";
+import { claimDueSources, defaultHandler, processSource } from "@/modules/ingestion";
 
 let shuttingDown = false;
 let activeWork: Promise<unknown> = Promise.resolve();
@@ -21,7 +21,7 @@ async function tick(): Promise<void> {
   logger.info("tick: claimed sources", { count: sources.length });
   for (const source of sources) {
     if (shuttingDown) break;
-    await processSource(source);
+    await processSource(source, defaultHandler);
   }
 }
 

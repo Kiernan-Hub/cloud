@@ -65,6 +65,16 @@ export const sources = pgTable(
     nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull().defaultNow(),
     consecutiveFailures: integer("consecutive_failures").notNull().default(0),
 
+    // Conditional-request validators from the last successful fetch, sent
+    // back on the next poll so an unchanged feed costs the publisher a 304
+    // instead of a full transfer.
+    lastEtag: text("last_etag"),
+    lastModifiedHeader: text("last_modified_header"),
+
+    // Timezone applied to feed values that carry none of their own (DATE
+    // values and floating times). IANA name.
+    defaultTimezone: text("default_timezone").notNull().default("America/New_York"),
+
     enabled: boolean("enabled").notNull().default(false),
     disabledReason: text("disabled_reason"),
 

@@ -176,3 +176,6 @@ export async function getSourceHealth(): Promise<SourceHealth[]> {
     isStale: row.lastSyncedAt ? isStale(new Date(row.lastSyncedAt)) : true,
   }));
 }
+
+export { upsertSourceEvents } from "./upsert";
+export type { UpsertOptions, UpsertSummary } from "./upsert";

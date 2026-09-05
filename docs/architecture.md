@@ -57,9 +57,19 @@ raw snapshot ──▶ source parser ──▶ normalized candidate
                                   API ──▶ web client
 ```
 
-Each stage is isolated so one badly-behaved source cannot break the rest.
-Milestone 1 builds the skeleton of this: the worker, the run lifecycle, and the
-storage. Fetching and parsing arrive in Milestone 2 with the first real source.
+Each stage is isolated so one badly-behaved source cannot break the rest. The
+whole path is implemented and tested for iCalendar feeds (ADR 0006):
+
+| Stage     | Where                     | Notes                                                                                                |
+| --------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Fetch     | `ingestion/fetch.ts`      | Conditional requests (ETag / If-Modified-Since), bounded backoff with jitter, identifying user agent |
+| Snapshot  | `ingestion/ics-source.ts` | Hash always stored; payload only where terms allow, with an expiry                                   |
+| Parse     | `parsing/ics/`            | RFC 5545. Pure, fixture-tested, no database access                                                   |
+| Normalize | `normalization/`          | Source shape → candidate. Never invents a field                                                      |
+| Upsert    | `events/upsert.ts`        | Idempotent on `(source_id, source_event_key)`; freshness stamps kept honest                          |
+
+What is not implemented: recurrence expansion (`RRULE` is recorded, not
+expanded), and any non-ICS source format.
 
 ## Directory map
 
@@ -131,6 +141,8 @@ Every run gets a UUID that appears in each structured log line for that run.
 
 Deliberately, per the milestone boundaries in `OVERVIEW.md`:
 
-- No live source, fetching, or parsing (Milestone 2).
+- No live source is connected. The pipeline is built and tested; it needs a
+  verified feed URL (see the README).
+- No recurrence expansion, and no parser for formats other than ICS.
 - No search, filters, dedup logic, bookmarks, or calendar export (Milestone 3).
 - No deployment, monitoring, or accounts (Milestones 4–5).

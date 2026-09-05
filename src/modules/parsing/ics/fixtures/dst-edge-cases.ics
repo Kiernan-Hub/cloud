@@ -1,0 +1,28 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//HoosRadar Test//DST Fixture//EN
+BEGIN:VEVENT
+UID:dst-gap@example.invalid
+SUMMARY:Event in the spring-forward gap
+DTSTART;TZID=America/New_York:20260308T023000
+DTSTAMP:20260301T090000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:dst-overlap@example.invalid
+SUMMARY:Event in the fall-back overlap
+DTSTART;TZID=America/New_York:20261101T013000
+DTSTAMP:20260301T090000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:dst-before@example.invalid
+SUMMARY:Standard time, before the switch
+DTSTART;TZID=America/New_York:20260301T120000
+DTSTAMP:20260301T090000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:dst-after@example.invalid
+SUMMARY:Daylight time, after the switch
+DTSTART;TZID=America/New_York:20260401T120000
+DTSTAMP:20260301T090000Z
+END:VEVENT
+END:VCALENDAR
