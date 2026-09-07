@@ -3,14 +3,9 @@ import Link from "next/link";
 
 import "./globals.css";
 
-// Deliberately no next/font/google: it fetches from an external host at
-// build time, which would break the "CI reaches no external network host"
-// requirement in the Milestone 1 breakdown. System font stack instead.
-
 export const metadata: Metadata = {
-  title: "HoosRadar",
-  description:
-    "Campus events from public UVA sources, in one place, with a link back to the original.",
+  title: "Gatekeeper",
+  description: "Run and track your project's quality gates.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -20,11 +15,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="site-header">
           <div className="container">
             <h1 className="site-title">
-              <Link href="/">HoosRadar</Link>
+              <Link href="/">Gatekeeper</Link>
             </h1>
-            <p className="tagline">
-              Public UVA campus events, with a link back to every source.
-            </p>
+            <p className="tagline">Which gates block you, lie to you, and drift.</p>
           </div>
         </header>
         <main className="container">{children}</main>

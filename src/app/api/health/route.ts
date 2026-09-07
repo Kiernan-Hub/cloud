@@ -4,8 +4,6 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// Process + database reachability only. Source freshness is a different
-// question and lives at /api/health/sources — see OVERVIEW.md section 7.
 export async function GET() {
   try {
     await db.execute(sql`select 1`);

@@ -3,5 +3,5 @@
 // run with no extra setup.
 
 process.env.DATABASE_URL ??=
-  "postgresql://hoosradar:hoosradar_dev@localhost:5432/hoosradar";
+  "postgresql://gatekeeper:gatekeeper_dev@localhost:5432/gatekeeper";
 process.env.LOG_LEVEL ??= "error";

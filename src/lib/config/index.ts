@@ -8,6 +8,7 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  /** How often the worker looks for projects due a scheduled run. */
   WORKER_TICK_SECONDS: z.coerce.number().int().positive().default(60),
 });
 
@@ -34,3 +35,12 @@ export function getConfig(): AppConfig {
   }
   return cached;
 }
+
+export {
+  exampleGatefile,
+  GATEFILE_NAME,
+  gatefileSchema,
+  GatefileError,
+  loadGatefile,
+} from "./gatefile";
+export type { Gatefile } from "./gatefile";

@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1788472071122,
-      "tag": "0000_flippant_prima",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1788472084685,
-      "tag": "0001_search_vector",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788573677483,
-      "tag": "0002_natural_shockwave",
+      "when": 1788797050485,
+      "tag": "0000_giant_kronos",
       "breakpoints": true
     }
   ]

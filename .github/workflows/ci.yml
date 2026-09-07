@@ -17,19 +17,19 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: hoosradar
-          POSTGRES_PASSWORD: hoosradar_dev
-          POSTGRES_DB: hoosradar
+          POSTGRES_USER: gatekeeper
+          POSTGRES_PASSWORD: gatekeeper_dev
+          POSTGRES_DB: gatekeeper
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U hoosradar -d hoosradar"
+          --health-cmd "pg_isready -U gatekeeper -d gatekeeper"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://hoosradar:hoosradar_dev@localhost:5432/hoosradar
+      DATABASE_URL: postgresql://gatekeeper:gatekeeper_dev@localhost:5432/gatekeeper
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:

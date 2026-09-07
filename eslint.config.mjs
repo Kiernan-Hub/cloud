@@ -25,11 +25,11 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // Parsers take bytes, return plain objects. They must not be able to
-    // reach storage, dedup, search, or the database client — this is the
-    // load-bearing rule that keeps a bad source from corrupting data and
-    // keeps parser tests fixture-only.
-    files: ["src/modules/parsing/**/*.{ts,tsx}"],
+    // The runner executes commands and reports results. It must not be able
+    // to reach storage — that keeps it testable against real subprocesses
+    // with no database, and keeps "what happened" separate from "what we
+    // recorded about it".
+    files: ["src/modules/runner/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -38,17 +38,17 @@ const eslintConfig = defineConfig([
             noDeepModuleImports,
             {
               group: [
-                "@/modules/events",
-                "@/modules/events/*",
-                "@/modules/dedup",
-                "@/modules/dedup/*",
-                "@/modules/search",
-                "@/modules/search/*",
+                "@/modules/runs",
+                "@/modules/runs/*",
+                "@/modules/projects",
+                "@/modules/projects/*",
+                "@/modules/analysis",
+                "@/modules/analysis/*",
                 "@/lib/db",
                 "@/lib/db/*",
               ],
               message:
-                "parsing/ must not import storage or persistence. See docs/adr/0005-module-boundaries.md.",
+                "runner/ must not import storage or persistence. See docs/adr/0005-module-boundaries.md.",
             },
           ],
         },
@@ -66,13 +66,9 @@ const eslintConfig = defineConfig([
           patterns: [
             noDeepModuleImports,
             {
-              group: [
-                "@/modules/parsing",
-                "@/modules/parsing/*",
-                "@/modules/ingestion/*",
-              ],
+              group: ["@/modules/runner", "@/modules/runner/*"],
               message:
-                "app/ must not import parsing/ or ingestion/ internals. See docs/adr/0005-module-boundaries.md.",
+                "app/ must not execute gates. Read results through runs/ and analysis/. See docs/adr/0005-module-boundaries.md.",
             },
           ],
         },

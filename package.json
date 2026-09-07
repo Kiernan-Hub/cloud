@@ -1,5 +1,5 @@
 {
-  "name": "hoosradar",
+  "name": "gatekeeper",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,9 +15,7 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/lib/db/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env src/lib/db/seed.ts",
-    "source:add": "tsx --env-file-if-exists=.env src/cli/add-source.ts",
-    "source:run": "tsx --env-file-if-exists=.env src/cli/run-source.ts"
+    "gk": "tsx --env-file-if-exists=.env src/cli/gatekeeper.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

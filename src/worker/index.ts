@@ -1,27 +1,48 @@
-// Worker entrypoint: the scheduler loop from ADR 0004.
+// Worker: runs scheduled checks for every registered project.
 //
-// Runs as a separate process from the web app, sharing the same codebase.
-// Start with `npm run worker`.
+// Deliberately simple. Unlike a hosted CI, there is nothing to poll and no
+// queue to drain — the worker's job is to run the gates on a cadence so
+// slow-moving regressions (a dependency bump, a clock change, a growing
+// bundle) get caught even when nobody pushed anything.
+//
+// A project whose run throws does not stop the others, and does not stop the
+// loop.
 
 import { getConfig } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
-import { claimDueSources, defaultHandler, processSource } from "@/modules/ingestion";
+import { listProjects } from "@/modules/projects";
+import { runChecks } from "@/modules/runs";
 
 let shuttingDown = false;
 let activeWork: Promise<unknown> = Promise.resolve();
 
 async function tick(): Promise<void> {
-  const sources = await claimDueSources();
-  if (sources.length === 0) {
-    logger.debug("tick: no sources due");
+  const projects = await listProjects();
+  if (projects.length === 0) {
+    logger.debug("tick: no projects registered");
     return;
   }
 
-  logger.info("tick: claimed sources", { count: sources.length });
-  for (const source of sources) {
+  for (const project of projects) {
     if (shuttingDown) break;
-    await processSource(source, defaultHandler);
+    try {
+      const summary = await runChecks({
+        projectId: project.id,
+        repoPath: project.repoPath,
+        trigger: "scheduled",
+      });
+      logger.info("scheduled run complete", {
+        project_id: project.id,
+        status: summary.status,
+      });
+    } catch (error: unknown) {
+      // One unreachable repo must not stop the rest.
+      logger.error("scheduled run failed", {
+        project_id: project.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -31,8 +52,6 @@ async function main(): Promise<void> {
 
   while (!shuttingDown) {
     activeWork = tick().catch((error: unknown) => {
-      // A failure in the tick itself (e.g. database blip) must not kill the
-      // loop — log it and try again next tick.
       logger.error("tick failed", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -48,7 +67,7 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info("worker shutting down", { signal });
-  // Let in-flight work finish so a run is never orphaned in 'running'.
+  // Let the in-flight run finish so no check_run is orphaned in 'running'.
   await activeWork;
   await sqlClient.end();
   process.exit(0);

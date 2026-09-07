@@ -1,145 +1,134 @@
-# HoosRadar
+# Gatekeeper
 
-A campus event discovery app for the University of Virginia. It pulls events
-from scattered public UVA and student-organization calendars into one
-searchable place, and keeps a link to the original source plus a visible
-"last checked" timestamp on every event.
+Run your project's quality gates and keep the history. Gatekeeper tells you
+which gates block you, which ones are **flaky**, and which metrics are
+**drifting** — from your own repos, on your own machine, with nothing sent
+anywhere.
 
-**Status:** The ingestion pipeline is built and tested end to end — fetch,
-parse, normalize, deduplicate-safe upsert — for any iCalendar (ICS) feed.
-No real UVA source is connected yet: that needs one feed URL and a terms
-check. See [Adding a real source](#adding-a-real-source).
+It is not a hosted CI service. It is the thing that tells you what your gates
+have actually been doing.
+
+## What it does
+
+- Runs the commands you define (lint, typecheck, tests, build, anything) and
+  records every result with the commit it ran against.
+- **Detects flaky gates**: the same gate on the same commit producing both a
+  pass and a fail. Same input, different answer — that is a gate problem, not
+  a code problem.
+- **Detects regressions**: extracts a number from a gate's output (coverage,
+  bundle size, test count) and tells you when it moves the wrong way.
+- Shows pass rates, p95 durations, and captured output for every run.
+- Exits non-zero on failure, so `gatekeeper run` works as a pre-push hook.
 
 ## Requirements
 
 - Node.js 22 (LTS)
-- Docker (for local Postgres)
+- Docker (for local Postgres), or any Postgres 16
 
 ## Setup
 
 ```bash
-git clone <this repo>
-cd cloud
 npm install
-
-cp .env.example .env        # defaults match docker-compose.yml
-docker compose up -d        # starts Postgres 16 on :5432
-
-npm run db:migrate          # apply schema
-npm run db:seed             # load ~30 demo events
-
-npm run dev                 # http://localhost:3000
+cp .env.example .env
+docker compose up -d       # Postgres on :5432
+npm run db:migrate
 ```
 
-In a second terminal, to run the ingestion worker:
+## Using it
+
+From inside any repo on your machine:
 
 ```bash
-npm run worker
+cd ~/code/your-project
+npm run gk --prefix ~/code/gatekeeper -- init   # writes gatekeeper.json
+# edit the gates to match your project
+npm run gk --prefix ~/code/gatekeeper -- sync   # register it
+npm run gk --prefix ~/code/gatekeeper -- run    # run the gates
 ```
 
-The worker currently ticks, claims due sources, and records a run with a
-no-op handler. Real fetching arrives with the first source in Milestone 2.
+Then start the dashboard:
 
-> **No Docker?** Any local Postgres 16 works — create a `hoosradar` database
-> and point `DATABASE_URL` at it.
+```bash
+npm run dev     # http://localhost:3000
+```
+
+## Configuring gates
+
+`gatekeeper.json` in the repo root:
+
+```json
+{
+  "project": { "id": "my-app", "name": "My App" },
+  "gates": [
+    { "key": "lint", "name": "Lint", "command": "npm run lint" },
+    {
+      "key": "test",
+      "name": "Tests",
+      "command": "npm test -- --coverage",
+      "timeoutSeconds": 600,
+      "metric": {
+        "name": "coverage",
+        "pattern": "All files\\s+\\|\\s+([\\d.]+)",
+        "direction": "higher_is_better",
+        "threshold": 80
+      }
+    },
+    {
+      "key": "build",
+      "name": "Build",
+      "command": "npm run build",
+      "blocking": false
+    }
+  ]
+}
+```
+
+| Field              | Meaning                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `blocking`         | `false` runs and records the gate but does not fail the run. Good for a check you are trialling.                                      |
+| `timeoutSeconds`   | The gate is killed (whole process group) and recorded as `timed_out`, which is distinct from `failed`.                                |
+| `metric.pattern`   | Regex with one capture group, applied to the gate's output. Invalid regexes are rejected when the config loads, not silently ignored. |
+| `metric.direction` | Required with a metric. Without it, a coverage drop and a bundle-size drop look the same.                                             |
 
 ## Scripts
 
-| Command               | What it does                                      |
-| --------------------- | ------------------------------------------------- |
-| `npm run dev`         | Web app in development                            |
-| `npm run worker`      | Ingestion worker (scheduler loop)                 |
-| `npm run build`       | Production build                                  |
-| `npm test`            | Unit + integration tests (needs Postgres running) |
-| `npm run lint`        | ESLint, including module-boundary rules           |
-| `npm run typecheck`   | Next typegen + `tsc --noEmit`                     |
-| `npm run format`      | Prettier                                          |
-| `npm run db:migrate`  | Apply migrations                                  |
-| `npm run db:seed`     | Load demo data (idempotent)                       |
-| `npm run db:generate` | Generate a migration from schema changes          |
-| `npm run source:add`  | Register an ICS source (created disabled)         |
-| `npm run source:run`  | Run one source now, ignoring its schedule         |
+| Command                                 | What it does                                |
+| --------------------------------------- | ------------------------------------------- |
+| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `list`          |
+| `npm run dev`                           | Dashboard at localhost:3000                 |
+| `npm run worker`                        | Runs every registered project on a schedule |
+| `npm test`                              | Unit + integration tests (needs Postgres)   |
+| `npm run lint` / `typecheck` / `format` | Checks                                      |
+| `npm run db:migrate`                    | Apply migrations                            |
 
-All checks together, the same set CI runs:
+## How it reports things
 
-```bash
-npm run lint && npm run typecheck && npm test && npm run build
-```
+A few deliberate choices that make the numbers trustworthy:
 
-## Demo data
+- **Every attempt is stored**, including repeat runs of the same commit. That
+  repetition is the only evidence a flaky gate leaves, so it is never
+  deduplicated.
+- **A gate never run twice shows `—`, not `0%` flake rate.** No evidence is not
+  evidence of reliability.
+- **A dirty working tree is labeled.** That result cannot be reproduced from
+  the commit alone, and the run page says so.
+- **A gate that could not execute is `error`, not `failed`**, and makes the
+  whole run `error` rather than being quietly counted as a pass.
+- **Truncated output says it was truncated.** The tail is kept, since that is
+  where the failure is.
 
-`npm run db:seed` inserts ~30 events under a source called `demo-seed`, every
-title prefixed `[DEMO]`, so seeded data can never be mistaken for a real UVA
-event. It deliberately includes awkward cases the UI has to handle: an all-day
-event, an event with no end time, a cancelled event, one with no venue, and one
-that is stale.
+## A note on trust
 
-Running it twice yields 30 events, not 60 — that idempotency is the same
-guarantee real ingestion depends on.
+Gate commands come from `gatekeeper.json` and are executed on your machine —
+the same trust level as a Makefile or a CI workflow in the same repo. **Only
+point Gatekeeper at repos you trust.**
 
-## Adding a real source
+## Architecture
 
-Registering an ICS feed takes two commands. The source is created **disabled**
-so you can inspect a dry run before it goes live.
+See [`CLAUDE.md`](CLAUDE.md). The short version: a modular monolith plus a
+worker over one Postgres database, where `runner/` (which executes commands)
+is prevented by lint from importing storage — keeping "what happened" separate
+from "what we recorded about it".
 
-```bash
-npm run source:add -- \
-  --id uva-arts \
-  --name "UVA Arts" \
-  --owner "UVA Office of the Provost for the Arts" \
-  --homepage https://arts.virginia.edu/calendar \
-  --feed https://arts.virginia.edu/calendar/ics \
-  --terms-note "Public ICS feed; robots.txt checked; reviewed 2026-09-05"
-
-npm run source:run -- --id uva-arts     # dry run, prints what it found
-```
-
-If the dry run looks right, enable it:
-
-```bash
-psql "$DATABASE_URL" -c "UPDATE sources SET enabled = true WHERE id = 'uva-arts';"
-```
-
-`--terms-note` is required, and the database refuses to enable a source with no
-recorded terms review — the source policy in [`docs/sources/`](docs/sources/)
-is enforced, not just documented. Complete that checklist too.
-
-**Finding a feed URL:** on a Localist calendar, look for a subscribe or export
-link, or the ICS option under the filter menu. LibCal and most departmental
-calendars expose one similarly.
-
-## Endpoints
-
-| Route                 | Purpose                                     |
-| --------------------- | ------------------------------------------- |
-| `/`                   | Upcoming events                             |
-| `/events/[id]`        | Event detail with source link and freshness |
-| `/api/events`         | Cursor-paginated JSON, page size clamped    |
-| `/api/health`         | Process + database reachability             |
-| `/api/health/sources` | Per-source freshness                        |
-
-## Documentation
-
-| Document                                       | What it covers                                   |
-| ---------------------------------------------- | ------------------------------------------------ |
-| [`OVERVIEW.md`](OVERVIEW.md)                   | Product scope, requirements, roadmap, metrics    |
-| [`CLAUDE.md`](CLAUDE.md)                       | Working guardrails and what needs owner approval |
-| [`docs/architecture.md`](docs/architecture.md) | How the system fits together                     |
-| [`docs/adr/`](docs/adr/)                       | Architecture decisions and their tradeoffs       |
-| [`docs/schema/`](docs/schema/)                 | Event data model, explained                      |
-| [`docs/sources/`](docs/sources/)               | Source policy and vetting checklist              |
-| [`docs/discovery/`](docs/discovery/)           | Interview guide and findings                     |
-| [`docs/milestones/`](docs/milestones/)         | Per-milestone work breakdowns                    |
-
-## Where the project stands
-
-| Milestone                   | State                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------- |
-| 0 — Discovery and decisions | Architecture decided, schema drafted, 5/5 interviews complete. **Source vetting outstanding.** |
-| 1 — Walking skeleton        | Built: app + worker + database on seeded data                                                  |
-| 2 — First ingestion source  | Pipeline built and tested for any ICS feed; awaiting one verified UVA feed URL                 |
-| 3–6                         | Not started                                                                                    |
-
-The remaining blocker is confirming a real UVA feed URL and its terms — see
-[`docs/sources/vetting-findings-2026-09.md`](docs/sources/vetting-findings-2026-09.md).
-Once one is verified, connecting it is the two commands above.
+Documentation for the previous project in this repo is archived under
+[`docs/archive/`](docs/archive/).

@@ -1,132 +1,140 @@
-// Drizzle schema, translated from the reviewed design draft in
-// docs/schema/0001_initial.sql. That file explains the *why* behind these
-// tables (see docs/schema/event-model.md); this file is what actually runs.
+// Gatekeeper schema.
 //
-// The generated `search_vector` column on source_events cannot be expressed
-// portably in Drizzle's column builders (Postgres GENERATED ... STORED with
-// an arbitrary expression), so it is declared here as a plain readable
-// tsvector column and added to the database via a hand-written migration —
-// see drizzle/0001_search_vector.sql. Keep both in sync if source_events'
-// weighted fields change.
+// The domain: a *project* is a repo on disk. It has *gates* — commands that
+// must pass (lint, typecheck, tests, build). A *check run* executes every
+// enabled gate against one commit and records a *gate result* for each.
+//
+// Two things drive most of the design:
+//
+//   1. The same gate can run repeatedly on the *same commit*. That is not a
+//      mistake to be deduplicated away — it is the only way to detect a
+//      flaky gate, so the schema keeps every attempt rather than the latest.
+//   2. A gate can emit a metric (coverage %, bundle size, duration). Those
+//      need to be comparable over time to spot a regression, so they are a
+//      first-class column, not buried in captured output.
 
 import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
-  customType,
   index,
   integer,
   numeric,
   pgEnum,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
-const tsvector = customType<{ data: string }>({
-  dataType() {
-    return "tsvector";
-  },
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+export const projects = pgTable("projects", {
+  id: text("id").primaryKey(), // slug
+  name: text("name").notNull(),
+  repoPath: text("repo_path").notNull(), // absolute path on this machine
+  defaultBranch: text("default_branch").notNull().default("main"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Sources
+// Gates
 // ---------------------------------------------------------------------------
 
-export const collectionMethodEnum = pgEnum("collection_method", [
-  "ics",
-  "rss",
-  "atom",
-  "json_api",
-  "html",
+// Which direction is "better" for a gate's metric. Without this, a regression
+// check cannot tell a coverage drop from a bundle-size drop.
+export const metricDirectionEnum = pgEnum("metric_direction", [
+  "higher_is_better",
+  "lower_is_better",
 ]);
 
-export const sources = pgTable(
-  "sources",
+export const gates = pgTable(
+  "gates",
   {
-    id: text("id").primaryKey(),
-    displayName: text("display_name").notNull(),
-    owner: text("owner").notNull(),
-    homepageUrl: text("homepage_url").notNull(),
-    feedUrl: text("feed_url"),
-    method: collectionMethodEnum("method").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    key: text("key").notNull(), // slug, unique within the project
+    name: text("name").notNull(),
+    command: text("command").notNull(),
+    workingDir: text("working_dir"), // relative to repoPath; null = repo root
+    timeoutSeconds: integer("timeout_seconds").notNull().default(300),
 
-    termsUrl: text("terms_url"),
-    termsReviewedAt: timestamp("terms_reviewed_at", { withTimezone: true }),
-    termsNotes: text("terms_notes"),
-    retainRawPayload: boolean("retain_raw_payload").notNull().default(false),
-    rawRetentionDays: integer("raw_retention_days").notNull().default(7),
-    contactEmail: text("contact_email"),
+    // A non-blocking gate still runs and is still recorded — it just does not
+    // fail the run. Useful for a check you are trialling before enforcing.
+    blocking: boolean("blocking").notNull().default(true),
+    enabled: boolean("enabled").notNull().default(true),
+    position: integer("position").notNull().default(0),
 
-    intervalSeconds: integer("interval_seconds").notNull().default(3600),
-    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull().defaultNow(),
-    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
-
-    // Conditional-request validators from the last successful fetch, sent
-    // back on the next poll so an unchanged feed costs the publisher a 304
-    // instead of a full transfer.
-    lastEtag: text("last_etag"),
-    lastModifiedHeader: text("last_modified_header"),
-
-    // Timezone applied to feed values that carry none of their own (DATE
-    // values and floating times). IANA name.
-    defaultTimezone: text("default_timezone").notNull().default("America/New_York"),
-
-    enabled: boolean("enabled").notNull().default(false),
-    disabledReason: text("disabled_reason"),
+    // Optional metric extraction: a regex with one capture group, applied to
+    // the gate's combined output.
+    metricName: text("metric_name"),
+    metricPattern: text("metric_pattern"),
+    metricDirection: metricDirectionEnum("metric_direction"),
+    metricThreshold: numeric("metric_threshold"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("sources_due_idx")
-      .on(table.nextRunAt)
-      .where(sql`${table.enabled}`),
+    uniqueIndex("gate_key_unique").on(table.projectId, table.key),
+    index("gates_project_idx").on(table.projectId, table.position),
+    check("positive_timeout", sql`${table.timeoutSeconds} > 0`),
+    // A metric needs a name, a pattern and a direction, or none of them.
+    // Half-configured metric extraction silently produces nothing.
     check(
-      "enabled_requires_terms_review",
-      sql`${table.enabled} = false OR ${table.termsReviewedAt} IS NOT NULL`,
+      "metric_fully_configured",
+      sql`(${table.metricName} IS NULL AND ${table.metricPattern} IS NULL AND ${table.metricDirection} IS NULL)
+          OR (${table.metricName} IS NOT NULL AND ${table.metricPattern} IS NOT NULL AND ${table.metricDirection} IS NOT NULL)`,
     ),
-    check("positive_interval", sql`${table.intervalSeconds} > 0`),
   ],
 );
 
 // ---------------------------------------------------------------------------
-// Ingestion runs — job record + observability record (docs/adr/0004)
+// Check runs
 // ---------------------------------------------------------------------------
 
 export const runStatusEnum = pgEnum("run_status", [
   "running",
-  "succeeded",
-  "partial",
+  "passed",
   "failed",
+  "error",
 ]);
 
-export const ingestionRuns = pgTable(
-  "ingestion_runs",
+export const triggerEnum = pgEnum("run_trigger", ["manual", "scheduled", "watch"]);
+
+export const checkRuns = pgTable(
+  "check_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sourceId: text("source_id")
+    projectId: text("project_id")
       .notNull()
-      .references(() => sources.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "cascade" }),
+
+    // Repo state at the moment of the run. Kept even if the commit is later
+    // rebased away — the record is of what was checked, not of what still
+    // exists.
+    commitSha: text("commit_sha").notNull(),
+    commitSubject: text("commit_subject"),
+    branch: text("branch"),
+    dirty: boolean("dirty").notNull().default(false), // uncommitted changes present
+
     status: runStatusEnum("status").notNull().default("running"),
+    trigger: triggerEnum("trigger").notNull().default("manual"),
+
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
-
-    recordsSeen: integer("records_seen").notNull().default(0),
-    recordsCreated: integer("records_created").notNull().default(0),
-    recordsUpdated: integer("records_updated").notNull().default(0),
-    recordsSkipped: integer("records_skipped").notNull().default(0),
-    recordsFailed: integer("records_failed").notNull().default(0),
-
-    attempt: integer("attempt").notNull().default(1),
-    errorKind: text("error_kind"),
-    errorSummary: text("error_summary"),
+    durationMs: integer("duration_ms"),
   },
   (table) => [
-    index("ingestion_runs_source_time_idx").on(table.sourceId, table.startedAt),
+    index("runs_project_time_idx").on(table.projectId, table.startedAt),
+    // Flake detection reads every run for a commit, so this is the hot path.
+    index("runs_commit_idx").on(table.projectId, table.commitSha),
     check(
       "finished_runs_have_end",
       sql`${table.status} = 'running' OR ${table.finishedAt} IS NOT NULL`,
@@ -135,214 +143,55 @@ export const ingestionRuns = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Raw snapshots — bounded retention, only where a source's terms allow it
+// Gate results
 // ---------------------------------------------------------------------------
 
-export const rawSnapshots = pgTable(
-  "raw_snapshots",
+export const gateStatusEnum = pgEnum("gate_status", [
+  "passed",
+  "failed",
+  "timed_out",
+  "skipped",
+  "error", // could not execute at all (bad command, missing dir)
+]);
+
+export const gateResults = pgTable(
+  "gate_results",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     runId: uuid("run_id")
       .notNull()
-      .references(() => ingestionRuns.id, { onDelete: "cascade" }),
-    sourceId: text("source_id")
+      .references(() => checkRuns.id, { onDelete: "cascade" }),
+    gateId: uuid("gate_id")
       .notNull()
-      .references(() => sources.id, { onDelete: "cascade" }),
-    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
-    httpStatus: integer("http_status"),
-    contentType: text("content_type"),
-    contentHash: text("content_hash").notNull(),
-    byteSize: integer("byte_size"),
-    payload: text("payload"), // null when retention is not permitted
-    retainUntil: timestamp("retain_until", { withTimezone: true }).notNull(),
+      .references(() => gates.id, { onDelete: "cascade" }),
+
+    // Denormalized so history survives a gate being renamed or deleted.
+    // A result must stay readable even when its gate is gone.
+    gateKey: text("gate_key").notNull(),
+    projectId: text("project_id").notNull(),
+    commitSha: text("commit_sha").notNull(),
+
+    status: gateStatusEnum("status").notNull(),
+    exitCode: integer("exit_code"),
+    durationMs: integer("duration_ms").notNull(),
+
+    // Output is capped, not stored whole: a failing test suite can emit
+    // megabytes and the tail is what tells you what broke.
+    stdoutTail: text("stdout_tail"),
+    stderrTail: text("stderr_tail"),
+    truncated: boolean("truncated").notNull().default(false),
+
+    metricValue: numeric("metric_value"),
+
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
   },
   (table) => [
-    index("raw_snapshots_expiry_idx").on(table.retainUntil),
-    index("raw_snapshots_run_idx").on(table.runId),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Organizations
-// ---------------------------------------------------------------------------
-
-export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  normalizedName: text("normalized_name").notNull().unique(), // dedup key
-  displayName: text("display_name").notNull(), // as the source wrote it
-  homepageUrl: text("homepage_url"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Source events — one row per event PER SOURCE. See event-model.md for why
-// this is not the same thing as a deduplicated event.
-// ---------------------------------------------------------------------------
-
-export const eventStatusEnum = pgEnum("event_status", [
-  "scheduled",
-  "cancelled",
-  "postponed",
-]);
-
-export const sourceEvents = pgTable(
-  "source_events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-
-    sourceId: text("source_id")
-      .notNull()
-      .references(() => sources.id, { onDelete: "cascade" }),
-    sourceEventKey: text("source_event_key").notNull(),
-    canonicalUrl: text("canonical_url").notNull(),
-    firstRunId: uuid("first_run_id").references(() => ingestionRuns.id, {
-      onDelete: "set null",
-    }),
-    lastRunId: uuid("last_run_id").references(() => ingestionRuns.id, {
-      onDelete: "set null",
-    }),
-
-    title: text("title").notNull(),
-    description: text("description"),
-    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-    endsAt: timestamp("ends_at", { withTimezone: true }),
-    timezone: text("timezone").notNull(), // IANA name
-    isAllDay: boolean("is_all_day").notNull().default(false),
-
-    venueName: text("venue_name"),
-    venueAddress: text("venue_address"),
-    latitude: numeric("latitude", { precision: 9, scale: 6 }),
-    longitude: numeric("longitude", { precision: 9, scale: 6 }),
-
-    organizationId: uuid("organization_id").references(() => organizations.id, {
-      onDelete: "set null",
-    }),
-    categoryRaw: text("category_raw"), // source's own wording, unmapped
-    tags: text("tags")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-
-    costText: text("cost_text"),
-    isFree: boolean("is_free"), // null = source did not say
-    accessibilityNotes: text("accessibility_notes"),
-
-    status: eventStatusEnum("status").notNull().default("scheduled"),
-
-    sourcePublishedAt: timestamp("source_published_at", {
-      withTimezone: true,
-    }),
-    sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
-    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
-    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    lastMaterialChangeAt: timestamp("last_material_change_at", {
-      withTimezone: true,
-    })
-      .notNull()
-      .defaultNow(),
-    contentHash: text("content_hash").notNull(),
-
-    // Populated by drizzle/0001_search_vector.sql as a generated column; not
-    // written by the application.
-    searchVector: tsvector("search_vector"),
-  },
-  (table) => [
-    uniqueIndex("idempotent_import").on(table.sourceId, table.sourceEventKey),
-    index("source_events_upcoming_idx")
-      .on(table.startsAt)
-      .where(sql`${table.status} <> 'cancelled'`),
-    index("source_events_org_idx").on(table.organizationId),
-    index("source_events_stale_idx").on(table.sourceId, table.lastSyncedAt),
-    check(
-      "ends_after_starts",
-      sql`${table.endsAt} IS NULL OR ${table.endsAt} >= ${table.startsAt}`,
-    ),
-    check(
-      "coords_together",
-      sql`(${table.latitude} IS NULL) = (${table.longitude} IS NULL)`,
-    ),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Deduplication — grouping only. Never mutates or deletes source_events.
-// ---------------------------------------------------------------------------
-
-export const matchStrategyEnum = pgEnum("match_strategy", [
-  "exact_key",
-  "canonical_url",
-  "deterministic_similarity",
-  "manual",
-]);
-
-export const duplicateGroups = pgTable("duplicate_groups", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  primaryEventId: uuid("primary_event_id").references(() => sourceEvents.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-  reviewedBy: text("reviewed_by"),
-  reviewNote: text("review_note"),
-});
-
-export const duplicateGroupMembers = pgTable(
-  "duplicate_group_members",
-  {
-    groupId: uuid("group_id")
-      .notNull()
-      .references(() => duplicateGroups.id, { onDelete: "cascade" }),
-    eventId: uuid("event_id")
-      .notNull()
-      .references(() => sourceEvents.id, { onDelete: "cascade" }),
-    addedBy: matchStrategyEnum("added_by").notNull(),
-    matchScore: numeric("match_score", { precision: 4, scale: 3 }),
-    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
-    removedAt: timestamp("removed_at", { withTimezone: true }), // unmerge = set this, never delete the row
-    removedReason: text("removed_reason"),
-  },
-  (table) => [
-    primaryKey({ columns: [table.groupId, table.eventId] }),
-    uniqueIndex("duplicate_members_one_active_group_idx")
-      .on(table.eventId)
-      .where(sql`${table.removedAt} IS NULL`),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Corrections — tracked, never a destructive edit to imported data
-// ---------------------------------------------------------------------------
-
-export const correctionStatusEnum = pgEnum("correction_status", [
-  "open",
-  "accepted",
-  "rejected",
-]);
-
-export const corrections = pgTable(
-  "corrections",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    eventId: uuid("event_id")
-      .notNull()
-      .references(() => sourceEvents.id, { onDelete: "cascade" }),
-    field: text("field").notNull(),
-    reportedValue: text("reported_value"),
-    reason: text("reason"),
-    status: correctionStatusEnum("status").notNull().default("open"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-    resolvedBy: text("resolved_by"),
-    resolutionNote: text("resolution_note"),
-  },
-  (table) => [
-    index("corrections_open_idx")
-      .on(table.eventId)
-      .where(sql`${table.status} = 'open'`),
+    // One result per gate per run. Repeated runs of the same commit are
+    // separate rows — that repetition is the flake signal.
+    uniqueIndex("one_result_per_gate_per_run").on(table.runId, table.gateId),
+    index("results_gate_history_idx").on(table.gateId, table.startedAt),
+    index("results_flake_idx").on(table.projectId, table.gateKey, table.commitSha),
+    check("non_negative_duration", sql`${table.durationMs} >= 0`),
   ],
 );

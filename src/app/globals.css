@@ -1,35 +1,34 @@
 :root {
   --bg: #fbfaf8;
   --surface: #ffffff;
-  --border: #e2ded8;
-  --text: #1c1a17;
-  --text-muted: #5f5a52;
-  --accent: #232d4b; /* UVA navy */
-  --accent-contrast: #ffffff;
-  --warning-bg: #fdf4e3;
-  --warning-border: #e0b654;
-  --warning-text: #6b4c07;
-  --cancelled-bg: #fbeceb;
-  --cancelled-border: #d38b85;
-  --cancelled-text: #7d2b23;
+  --border: #e3dfd9;
+  --text: #1b1917;
+  --text-muted: #615c54;
+  --accent: #1f4d8f;
+  --pass: #1a7f4b;
+  --pass-bg: #e8f6ee;
+  --fail: #b3261e;
+  --fail-bg: #fbeceb;
+  --warn: #8a6300;
+  --warn-bg: #fdf4e3;
   --focus: #0b63c5;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161513;
-    --surface: #201f1c;
-    --border: #35322d;
+    --bg: #151412;
+    --surface: #1f1e1b;
+    --border: #34312c;
     --text: #f2efe9;
-    --text-muted: #a8a29a;
-    --accent: #9db4e0;
-    --accent-contrast: #161513;
-    --warning-bg: #2e2410;
-    --warning-border: #8a6a1f;
-    --warning-text: #f0d9a1;
-    --cancelled-bg: #2e1917;
-    --cancelled-border: #8a4038;
-    --cancelled-text: #f0b6ae;
+    --text-muted: #a6a099;
+    --accent: #8fb4ea;
+    --pass: #5fd39a;
+    --pass-bg: #102a1d;
+    --fail: #f2938c;
+    --fail-bg: #2d1715;
+    --warn: #f0d9a1;
+    --warn-bg: #2c2210;
     --focus: #7fb4ff;
   }
 }
@@ -55,111 +54,155 @@ body {
 a {
   color: var(--accent);
 }
-
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
 .container {
-  max-width: 52rem;
+  max-width: 60rem;
   margin: 0 auto;
   padding: 1.5rem 1rem 4rem;
 }
-
 .site-header {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-
 .site-header .container {
   padding-block: 1rem;
 }
-
 .site-title {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   letter-spacing: -0.01em;
 }
-
 .site-title a {
   color: inherit;
   text-decoration: none;
 }
-
 .tagline {
-  margin: 0.25rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
-.event-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.event-card {
+.card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem;
 }
 
-.event-card h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
+.grid {
+  display: grid;
+  gap: 0.75rem;
+}
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
 }
 
-.event-card h2 a {
-  text-decoration: none;
+.stat {
+  text-align: left;
 }
-
-.event-card h2 a:hover {
-  text-decoration: underline;
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 650;
+  line-height: 1.1;
 }
-
-.event-meta {
-  margin: 0;
+.stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
-  font-size: 0.9rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
-}
-
-.provenance {
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
-  border-top: 1px dashed var(--border);
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
+  margin-top: 0.2rem;
 }
 
 .badge {
   display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
   border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.badge-pass {
+  background: var(--pass-bg);
+  color: var(--pass);
+  border-color: var(--pass);
+}
+.badge-fail {
+  background: var(--fail-bg);
+  color: var(--fail);
+  border-color: var(--fail);
+}
+.badge-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
-.badge-stale {
-  background: var(--warning-bg);
-  border-color: var(--warning-border);
-  color: var(--warning-text);
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table-wrap {
+  overflow-x: auto;
 }
 
-.badge-cancelled {
-  background: var(--cancelled-bg);
-  border-color: var(--cancelled-border);
-  color: var(--cancelled-text);
+.mono {
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+.muted {
+  color: var(--text-muted);
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 1.75rem 0 0.6rem;
+}
+h2:first-child {
+  margin-top: 0;
+}
+
+pre.output {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  max-height: 26rem;
+  margin: 0;
+}
+
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 40px;
 }
 
 .notice {
@@ -168,54 +211,13 @@ a {
   padding: 1.25rem;
   background: var(--surface);
 }
-
-.notice-warning {
-  background: var(--warning-bg);
-  border-color: var(--warning-border);
-  color: var(--warning-text);
+.notice-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn);
+  color: var(--warn);
 }
-
-.notice-error {
-  background: var(--cancelled-bg);
-  border-color: var(--cancelled-border);
-  color: var(--cancelled-text);
-}
-
-.pagination {
-  margin-top: 1.5rem;
-}
-
 .back-link {
   display: inline-block;
   margin-bottom: 1rem;
   font-size: 0.9rem;
-}
-
-.detail-section {
-  margin-top: 1.5rem;
-}
-
-.detail-section h2 {
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin-bottom: 0.35rem;
-}
-
-dl.provenance-list {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-dl.provenance-list dt {
-  color: var(--text-muted);
-}
-
-dl.provenance-list dd {
-  margin: 0;
-  overflow-wrap: anywhere;
 }
