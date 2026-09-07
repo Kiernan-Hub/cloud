@@ -106,7 +106,15 @@ export const runStatusEnum = pgEnum("run_status", [
   "error",
 ]);
 
-export const triggerEnum = pgEnum("run_trigger", ["manual", "scheduled", "watch"]);
+// `flake` marks a run that was one attempt in a deliberate flakiness probe,
+// so the dashboard can tell "I re-ran this to hunt a flake" apart from "this
+// happened to run twice".
+export const triggerEnum = pgEnum("run_trigger", [
+  "manual",
+  "scheduled",
+  "watch",
+  "flake",
+]);
 
 export const checkRuns = pgTable(
   "check_runs",
@@ -161,9 +169,12 @@ export const gateResults = pgTable(
     runId: uuid("run_id")
       .notNull()
       .references(() => checkRuns.id, { onDelete: "cascade" }),
-    gateId: uuid("gate_id")
-      .notNull()
-      .references(() => gates.id, { onDelete: "cascade" }),
+    // Nullable, and set null rather than cascade, on purpose: deleting a
+    // gate discards the *rule*, not the record of what it found. A cascade
+    // here silently destroyed exactly the flake history the tool exists to
+    // collect. The denormalized columns below are what let a result stay
+    // readable once this link is gone.
+    gateId: uuid("gate_id").references(() => gates.id, { onDelete: "set null" }),
 
     // Denormalized so history survives a gate being renamed or deleted.
     // A result must stay readable even when its gate is gone.

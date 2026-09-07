@@ -90,16 +90,45 @@ npm run dev     # http://localhost:3000
 | `metric.pattern`   | Regex with one capture group, applied to the gate's output. Invalid regexes are rejected when the config loads, not silently ignored. |
 | `metric.direction` | Required with a metric. Without it, a coverage drop and a bundle-size drop look the same.                                             |
 
+Commands run under `/bin/sh`, not bash. Bash-only syntax (`$RANDOM`, `[[ ]]`,
+arrays) will not behave as you expect — wrap it in `bash -c "..."` if you need it.
+
 ## Scripts
 
 | Command                                 | What it does                                |
 | --------------------------------------- | ------------------------------------------- |
-| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `list`          |
+| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `flake`, `list` |
 | `npm run dev`                           | Dashboard at localhost:3000                 |
 | `npm run worker`                        | Runs every registered project on a schedule |
 | `npm test`                              | Unit + integration tests (needs Postgres)   |
 | `npm run lint` / `typecheck` / `format` | Checks                                      |
 | `npm run db:migrate`                    | Apply migrations                            |
+
+## Hunting a flaky gate
+
+When you suspect a gate is unreliable, make it prove it:
+
+```bash
+npm run gk -- flake --gate test --times 10
+```
+
+It re-runs that gate on the current commit and stops as soon as it catches a
+disagreement:
+
+```
+   1 ✗ test    6ms
+   2 ✗ test    5ms
+   3 ✓ test    5ms
+
+FLAKY  Tests: passed 1/3 on the same commit.
+       Same input, different answer — that is a gate problem,
+       not a code problem.
+```
+
+If it never disagrees, the tool says so precisely — _"no flakiness observed in
+10 attempts, which does not rule it out"_ — because ten passes cannot rule out
+a one-in-fifty flake. Exits non-zero when flakiness is observed. `--all` runs
+every attempt instead of stopping early.
 
 ## How it reports things
 

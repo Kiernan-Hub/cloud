@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db, sqlClient } from "@/lib/db";
-import { upsertGate, upsertProject } from "@/modules/projects";
+import { removeGatesNotIn, upsertGate, upsertProject } from "@/modules/projects";
 import { getRun, listRuns, runChecks } from "@/modules/runs";
 
 const run = promisify(execFile);
@@ -209,22 +209,32 @@ describe("getRun", () => {
 });
 
 describe("gate history survives gate deletion", () => {
-  it("keeps results readable after the gate is removed", async () => {
-    const gate = await upsertGate(PROJECT, {
-      key: "temp",
-      name: "Temp",
-      command: "exit 0",
-    });
+  it("keeps results readable after the gate is actually deleted", async () => {
+    await upsertGate(PROJECT, { key: "temp", name: "Temp", command: "exit 0" });
+    await runChecks({ projectId: PROJECT, repoPath });
 
-    const summary = await runChecks({ projectId: PROJECT, repoPath });
-    expect(summary.results).toHaveLength(1);
+    // The earlier version of this test asserted the rows existed *before*
+    // deleting anything, so it passed while an ON DELETE CASCADE was quietly
+    // destroying the history. Delete the gate for real, then check.
+    await removeGatesNotIn(PROJECT, []);
+
+    const after = await db.execute<{
+      gate_key: string;
+      project_id: string;
+      commit_sha: string;
+      gate_id: string | null;
+    }>(
+      sql`SELECT gate_key, project_id, commit_sha, gate_id
+          FROM gate_results WHERE project_id = ${PROJECT}`,
+    );
 
     // Deleting a gate discards the rule, not the record of what it found.
-    // gate_results denormalizes gate_key/project_id/commit_sha for this.
-    const before = await db.execute<{ gate_key: string; project_id: string }>(
-      sql`SELECT gate_key, project_id FROM gate_results WHERE gate_id = ${gate.id}`,
-    );
-    expect(before[0]!.gate_key).toBe("temp");
-    expect(before[0]!.project_id).toBe(PROJECT);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.gate_key).toBe("temp");
+    expect(after[0]!.project_id).toBe(PROJECT);
+    expect(after[0]!.commit_sha).toMatch(/^[0-9a-f]{40}$/);
+    // The link to the gate is gone; the denormalized columns are what keep
+    // the row meaningful.
+    expect(after[0]!.gate_id).toBeNull();
   });
 });

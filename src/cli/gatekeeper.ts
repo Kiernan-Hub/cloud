@@ -26,12 +26,15 @@ import {
   upsertGate,
   upsertProject,
 } from "@/modules/projects";
-import { runChecks } from "@/modules/runs";
+import { NoSuchGateError, probeFlakiness, runChecks } from "@/modules/runs";
 
 const { values, positionals } = parseArgs({
   options: {
     repo: { type: "string" },
     only: { type: "string" },
+    gate: { type: "string" },
+    times: { type: "string", default: "5" },
+    all: { type: "boolean", default: false },
     trigger: { type: "string", default: "manual" },
     help: { type: "boolean", default: false },
   },
@@ -44,10 +47,15 @@ gatekeeper — run and track your project's quality gates
   gatekeeper init   [--repo <path>]        write a starter ${GATEFILE_NAME}
   gatekeeper sync   [--repo <path>]        register the project and its gates
   gatekeeper run    [--repo <path>] [--only lint,test]
+  gatekeeper flake  [--gate test] [--times 5] [--all]
   gatekeeper list                          list registered projects
 
 --repo defaults to the current directory.
 run exits non-zero if a blocking gate fails.
+
+flake re-runs a gate on the current commit to hunt for flakiness. It stops
+early once flakiness is proven; pass --all to run every attempt anyway.
+It exits non-zero if flakiness is observed.
 `;
 
 const out = (text: string) => process.stdout.write(`${text}\n`);
@@ -188,6 +196,69 @@ async function cmdRun(): Promise<number> {
   return summary.status === "passed" ? 0 : 1;
 }
 
+async function cmdFlake(): Promise<number> {
+  const config = await loadGatefile(repoPath);
+
+  const times = Number(values.times);
+  if (!Number.isInteger(times) || times < 2) {
+    err("--times must be an integer of at least 2");
+    return 2;
+  }
+
+  const gateKeys = values.gate
+    ?.split(",")
+    .map((key) => key.trim())
+    .filter(Boolean);
+
+  const result = await probeFlakiness({
+    projectId: config.project.id,
+    repoPath,
+    gateKeys,
+    attempts: times,
+    stopWhenProven: !values.all,
+    onAttempt: (gate, attempt) => {
+      const icon = ICONS[attempt.status] ?? "?";
+      out(
+        `  ${String(attempt.attempt).padStart(2)} ${icon} ${gate.key.padEnd(14)} ` +
+          `${formatDuration(attempt.durationMs).padStart(8)}`,
+      );
+    },
+  });
+
+  out("");
+  out(`Commit ${result.commitSha.slice(0, 8)}${result.dirty ? " (dirty tree)" : ""}`);
+  out("");
+
+  let anyFlaky = false;
+
+  for (const probe of result.probes) {
+    if (probe.flakinessObserved) {
+      anyFlaky = true;
+      out(
+        `FLAKY  ${probe.gateName}: passed ${probe.passed}/${probe.attempts.length} ` +
+          `on the same commit.`,
+      );
+      out("       Same input, different answer — that is a gate problem,");
+      out("       not a code problem.");
+    } else if (probe.passed === probe.attempts.length) {
+      out(`ok     ${probe.gateName}: passed ${probe.passed}/${probe.attempts.length}.`);
+      // Agreement is not proof. Say so rather than implying reliability.
+      out(
+        `       No flakiness observed in ${probe.attempts.length} attempts, which` +
+          ` does not rule it out.`,
+      );
+    } else {
+      out(
+        `FAILED ${probe.gateName}: failed all ${probe.attempts.length} attempts.` +
+          ` Consistently broken, not flaky.`,
+      );
+    }
+    out("");
+  }
+
+  return anyFlaky ? 1 : 0;
+}
+
 async function cmdList(): Promise<number> {
   const all = await listProjects();
   if (all.length === 0) {
@@ -215,6 +286,8 @@ async function main(): Promise<number> {
       return cmdSync();
     case "run":
       return cmdRun();
+    case "flake":
+      return cmdFlake();
     case "list":
       return cmdList();
     default:
@@ -232,6 +305,8 @@ main()
   .catch(async (error: unknown) => {
     if (error instanceof GatefileError) {
       err(`${error.message}\n  at ${error.path}`);
+    } else if (error instanceof NoSuchGateError) {
+      err(error.message);
     } else {
       logger.error("command failed", {
         error: error instanceof Error ? error.message : String(error),

@@ -215,3 +215,6 @@ export async function getRun(
 
   return { run, results };
 }
+
+export { NoSuchGateError, probeFlakiness } from "./flake";
+export type { FlakeAttempt, FlakeProbe, FlakeProbeResult, ProbeOptions } from "./flake";

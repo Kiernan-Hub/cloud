@@ -8,6 +8,20 @@
       "when": 1788797050485,
       "tag": "0000_giant_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788805738955,
+      "tag": "0001_safe_quasar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788805931721,
+      "tag": "0002_oval_peter_parker",
+      "breakpoints": true
     }
   ]
 }
