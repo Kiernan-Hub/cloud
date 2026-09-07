@@ -452,17 +452,17 @@ Vanity metrics and invented numbers are not acceptable.
 
 ## 14. Risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Source format changes | Isolated parsers, fixtures, freshness alerts, and fast source disablement |
-| Collection is disallowed | Review terms first, prefer feeds/APIs, document ownership, honor removal requests |
-| Incorrect event details | Preserve source links, show freshness, avoid unsupported inference, accept reports |
-| Duplicate or conflicting records | Retain provenance, use reversible merges, measure against labeled examples |
-| Scope expands too quickly | Treat the MVP list as a boundary and require evidence before post-MVP work |
-| No real users | Interview students early and test milestone 3 before personalization |
-| Free hosting limitations | Keep deployment portable and document a complete local demonstration path |
-| AI becomes the product rather than a tool | Establish strong conventional search and measurable baselines first |
-| Student cannot explain the system | Maintain decision records, architecture notes, and regular code walkthroughs |
+| Risk                                      | Mitigation                                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| Source format changes                     | Isolated parsers, fixtures, freshness alerts, and fast source disablement          |
+| Collection is disallowed                  | Review terms first, prefer feeds/APIs, document ownership, honor removal requests  |
+| Incorrect event details                   | Preserve source links, show freshness, avoid unsupported inference, accept reports |
+| Duplicate or conflicting records          | Retain provenance, use reversible merges, measure against labeled examples         |
+| Scope expands too quickly                 | Treat the MVP list as a boundary and require evidence before post-MVP work         |
+| No real users                             | Interview students early and test milestone 3 before personalization               |
+| Free hosting limitations                  | Keep deployment portable and document a complete local demonstration path          |
+| AI becomes the product rather than a tool | Establish strong conventional search and measurable baselines first                |
+| Student cannot explain the system         | Maintain decision records, architecture notes, and regular code walkthroughs       |
 
 ## 15. Autonomous working agreement
 

@@ -1,0 +1,45 @@
+{
+  "project": {
+    "id": "gatekeeper",
+    "name": "Gatekeeper",
+    "defaultBranch": "main"
+  },
+  "gates": [
+    {
+      "key": "lint",
+      "name": "Lint",
+      "command": "npm run lint",
+      "timeoutSeconds": 180
+    },
+    {
+      "key": "format",
+      "name": "Format check",
+      "command": "npm run format:check",
+      "timeoutSeconds": 120
+    },
+    {
+      "key": "typecheck",
+      "name": "Typecheck",
+      "command": "npm run typecheck",
+      "timeoutSeconds": 300
+    },
+    {
+      "key": "test",
+      "name": "Tests",
+      "command": "npm test",
+      "timeoutSeconds": 600,
+      "metric": {
+        "name": "tests_passed",
+        "pattern": "Tests\\s+(\\d+) passed",
+        "direction": "higher_is_better"
+      }
+    },
+    {
+      "key": "build",
+      "name": "Build",
+      "command": "npm run build",
+      "timeoutSeconds": 600,
+      "blocking": false
+    }
+  ]
+}
