@@ -99,11 +99,18 @@ export const gates = pgTable(
 // Check runs
 // ---------------------------------------------------------------------------
 
+// A run's verdict. Three of these exist because they call for different
+// responses: `passed` means the full gate set ran clean, `partial` means it
+// ran clean but not all of it ran, and `canceled` means it never reached a
+// verdict at all. Collapsing the last two into `passed` or `failed` would
+// invent news in one direction or the other.
 export const runStatusEnum = pgEnum("run_status", [
   "running",
   "passed",
+  "partial",
   "failed",
   "error",
+  "canceled",
 ]);
 
 export const triggerEnum = pgEnum("run_trigger", ["manual", "scheduled", "watch"]);
@@ -139,6 +146,11 @@ export const checkRuns = pgTable(
       "finished_runs_have_end",
       sql`${table.status} = 'running' OR ${table.finishedAt} IS NOT NULL`,
     ),
+    // Finding runs abandoned by a killed process, so they can be reconciled
+    // instead of sitting in 'running' forever.
+    index("runs_unfinished_idx")
+      .on(table.startedAt)
+      .where(sql`status = 'running'`),
   ],
 );
 

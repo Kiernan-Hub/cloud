@@ -31,8 +31,15 @@ export type GateFlakiness = {
  * This is why results are never deduplicated by commit. Re-running is the
  * measurement.
  *
- * A gate that was never run twice on any commit has `flakeRate: null`, not
- * zero. No evidence is not evidence of reliability.
+ * Runs from a dirty working tree are excluded entirely. The whole claim rests
+ * on two runs having had the same input, and a commit SHA does not identify
+ * the code when there are uncommitted changes on top of it: editing a file
+ * between two runs would otherwise be reported as the gate contradicting
+ * itself. That is the one place where this metric can lie outright, so the
+ * evidence it will not stand behind is thrown away rather than counted.
+ *
+ * A gate that was never run twice on one clean commit has `flakeRate: null`,
+ * not zero. No evidence is not evidence of reliability.
  */
 export async function gateFlakiness(projectId: string): Promise<GateFlakiness[]> {
   const rows = await db.execute<{
@@ -43,15 +50,17 @@ export async function gateFlakiness(projectId: string): Promise<GateFlakiness[]>
   }>(sql`
     WITH per_commit AS (
       SELECT
-        gate_key,
-        commit_sha,
-        COUNT(*)                                        AS attempts,
-        COUNT(*) FILTER (WHERE status = 'passed')       AS passes,
-        COUNT(*) FILTER (WHERE status <> 'passed')      AS non_passes
-      FROM gate_results
-      WHERE project_id = ${projectId}
-        AND status IN ('passed', 'failed', 'timed_out')
-      GROUP BY gate_key, commit_sha
+        r.gate_key,
+        r.commit_sha,
+        COUNT(*)                                          AS attempts,
+        COUNT(*) FILTER (WHERE r.status = 'passed')       AS passes,
+        COUNT(*) FILTER (WHERE r.status <> 'passed')      AS non_passes
+      FROM gate_results r
+      JOIN check_runs cr ON cr.id = r.run_id
+      WHERE r.project_id = ${projectId}
+        AND r.status IN ('passed', 'failed', 'timed_out')
+        AND NOT cr.dirty
+      GROUP BY r.gate_key, r.commit_sha
     )
     SELECT
       gate_key,
@@ -89,6 +98,14 @@ export type GateReliability = {
   p95DurationMs: number;
 };
 
+/**
+ * How each gate has actually behaved.
+ *
+ * `skipped` results are excluded throughout. A skipped result is a fact about
+ * the run, not about the gate — counting it would drop the gate's pass rate
+ * and its p95 duration for no reason other than someone having run
+ * `--only` on something else.
+ */
 export async function gateReliability(projectId: string): Promise<GateReliability[]> {
   const rows = await db.execute<{
     gate_key: string;
@@ -111,6 +128,7 @@ export async function gateReliability(projectId: string): Promise<GateReliabilit
       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms), 0)::int AS p95_ms
     FROM gate_results
     WHERE project_id = ${projectId}
+      AND status <> 'skipped'
     GROUP BY gate_key
     ORDER BY (COUNT(*) FILTER (WHERE status <> 'passed')) DESC, gate_key
   `);
@@ -301,26 +319,46 @@ export type ProjectSummary = {
   passed: number;
   failed: number;
   errored: number;
+  /** Runs that checked only part of the gate set. */
+  partial: number;
+  /** Runs that never reached a verdict. */
+  canceled: number;
+  /** Of the runs that judged the full gate set. Null when there are none. */
   passRate: number | null;
   lastRunAt: Date | null;
-  lastStatus: "passed" | "failed" | "error" | "running" | null;
+  lastStatus: "passed" | "partial" | "failed" | "error" | "canceled" | "running" | null;
   medianRunMs: number | null;
 };
 
+/**
+ * The headline numbers for a project.
+ *
+ * The pass rate counts only runs that reached a verdict on the *whole* gate
+ * set. A partial run cannot vote: counting it as a pass would credit checks
+ * that never ran, and counting it as a failure would blame gates that never
+ * ran either. Same for canceled runs, which established nothing at all. Both
+ * are reported separately so they are visible rather than quietly dropped.
+ */
 export async function projectSummary(projectId: string): Promise<ProjectSummary> {
   const [row] = await db.execute<{
-    total: number;
+    judged: number;
     passed: number;
     failed: number;
     errored: number;
+    partial: number;
+    canceled: number;
     median_ms: number | null;
   }>(sql`
     SELECT
-      COUNT(*)::int                                     AS total,
+      COUNT(*) FILTER (WHERE status IN ('passed', 'failed', 'error'))::int AS judged,
       COUNT(*) FILTER (WHERE status = 'passed')::int    AS passed,
       COUNT(*) FILTER (WHERE status = 'failed')::int    AS failed,
       COUNT(*) FILTER (WHERE status = 'error')::int     AS errored,
-      percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS median_ms
+      COUNT(*) FILTER (WHERE status = 'partial')::int   AS partial,
+      COUNT(*) FILTER (WHERE status = 'canceled')::int  AS canceled,
+      percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY duration_ms
+      ) FILTER (WHERE duration_ms IS NOT NULL)::int AS median_ms
     FROM check_runs
     WHERE project_id = ${projectId} AND status <> 'running'
   `);
@@ -332,14 +370,18 @@ export async function projectSummary(projectId: string): Promise<ProjectSummary>
     .orderBy(desc(checkRuns.startedAt))
     .limit(1);
 
-  const total = row?.total ?? 0;
+  const judged = row?.judged ?? 0;
+  const partial = row?.partial ?? 0;
+  const canceled = row?.canceled ?? 0;
 
   return {
-    totalRuns: total,
+    totalRuns: judged + partial + canceled,
     passed: row?.passed ?? 0,
     failed: row?.failed ?? 0,
     errored: row?.errored ?? 0,
-    passRate: total > 0 ? (row?.passed ?? 0) / total : null,
+    partial,
+    canceled,
+    passRate: judged > 0 ? (row?.passed ?? 0) / judged : null,
     lastRunAt: latest?.startedAt ?? null,
     lastStatus: latest?.status ?? null,
     medianRunMs: row?.median_ms ?? null,

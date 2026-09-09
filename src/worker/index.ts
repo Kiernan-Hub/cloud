@@ -12,12 +12,21 @@ import { getConfig } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { listProjects } from "@/modules/projects";
-import { runChecks } from "@/modules/runs";
+import { reconcileAbandonedRuns, runChecks } from "@/modules/runs";
+
+// How old an unfinished run must be before the worker declares it abandoned.
+// A SIGKILL leaves no handler to clean up, so those rows can only be found by
+// age. The bound is deliberately far longer than any plausible gate suite:
+// closing a run that is genuinely still going would be a worse lie than
+// leaving a dead one open for a few hours.
+const ABANDONED_AFTER_MS = 12 * 60 * 60 * 1000;
 
 let shuttingDown = false;
 let activeWork: Promise<unknown> = Promise.resolve();
 
 async function tick(): Promise<void> {
+  await reconcileAbandonedRuns(ABANDONED_AFTER_MS);
+
   const projects = await listProjects();
   if (projects.length === 0) {
     logger.debug("tick: no projects registered");

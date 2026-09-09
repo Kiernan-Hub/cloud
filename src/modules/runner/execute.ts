@@ -6,6 +6,9 @@
 //
 //   - a command that hangs is killed, and reported as timed out rather than
 //     as failed, because those need different responses from a human
+//   - a kill takes the whole process group, and waits for the child to
+//     actually die before reporting. Resolving early would let the caller
+//     exit while a test runner kept going, detached, on the user's machine
 //   - output is capped, keeping the tail, since that is where the error is
 //   - a command that cannot start at all is `error`, not `failed` — a broken
 //     gate definition is not the same as a gate that caught a real problem
@@ -22,6 +25,8 @@ export type ExecuteOptions = {
   env?: Record<string, string>;
   /** Bytes of stdout/stderr to keep. The tail is kept, not the head. */
   maxOutputBytes?: number;
+  /** Abort to kill the command early — an interrupted run, usually. */
+  signal?: AbortSignal;
 };
 
 export type ExecuteResult = {
@@ -84,7 +89,15 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
     const stderr = new TailBuffer(maxOutputBytes);
 
     let timedOut = false;
+    let aborted = false;
     let settled = false;
+
+    // A declaration, not a const, so `finish` can detach it even on the
+    // spawn-failed path that runs before the listener is ever attached.
+    function onAbort() {
+      aborted = true;
+      killGroup();
+    }
 
     const finish = (
       status: GateStatus,
@@ -94,6 +107,7 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
 
       const durationMs = Number((process.hrtime.bigint() - startedHr) / 1_000_000n);
 
@@ -127,8 +141,10 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
       return;
     }
 
-    const timer = setTimeout(() => {
-      timedOut = true;
+    // Take the whole group down, not just the shell we spawned. The result is
+    // still reported from `close`, so the caller does not resume until the
+    // child is genuinely gone.
+    const killGroup = () => {
       try {
         // Negative pid targets the whole group.
         process.kill(-child.pid!, "SIGTERM");
@@ -143,7 +159,19 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
       } catch {
         child.kill("SIGKILL");
       }
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup();
     }, options.timeoutSeconds * 1000);
+
+    if (options.signal?.aborted) {
+      aborted = true;
+      killGroup();
+    } else {
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+    }
 
     child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
@@ -156,6 +184,12 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
     child.on("close", (code, signal) => {
       if (timedOut) {
         finish("timed_out", code, signal);
+        return;
+      }
+      // A command we killed did not fail — we stopped it before it could
+      // answer. Reporting `failed` would blame the gate for our interrupt.
+      if (aborted) {
+        finish("error", code, signal);
         return;
       }
       finish(code === 0 ? "passed" : "failed", code, signal);

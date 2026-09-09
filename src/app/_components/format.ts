@@ -23,9 +23,12 @@ export function formatRate(rate: number | null): string {
 
 export function statusBadgeClass(status: string): string {
   if (status === "passed") return "badge badge-pass";
-  if (status === "running") return "badge";
   if (status === "failed" || status === "timed_out" || status === "error") {
     return "badge badge-fail";
   }
+  // `partial` is warned about rather than passed: it did not fail, but it did
+  // not check everything either. `canceled`, `skipped` and `running` are
+  // neutral — they are the absence of a result, not a bad one.
+  if (status === "partial") return "badge badge-warn";
   return "badge";
 }

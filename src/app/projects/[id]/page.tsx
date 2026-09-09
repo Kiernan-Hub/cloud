@@ -58,11 +58,22 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       <div className="grid grid-4" style={{ marginTop: "1rem" }}>
         <div className="card stat">
           <div className="stat-value">{formatRate(summary.passRate)}</div>
-          <div className="stat-label">Pass rate</div>
+          {/* Say what the rate is *of*. Partial and canceled runs judged
+              nothing, so they are named here rather than silently folded in. */}
+          <div className="stat-label">
+            Pass rate
+            {summary.partial + summary.canceled > 0
+              ? ` (of ${summary.totalRuns - summary.partial - summary.canceled} judged)`
+              : ""}
+          </div>
         </div>
         <div className="card stat">
           <div className="stat-value">{summary.totalRuns}</div>
-          <div className="stat-label">Total runs</div>
+          <div className="stat-label">
+            Total runs
+            {summary.partial > 0 ? ` · ${summary.partial} partial` : ""}
+            {summary.canceled > 0 ? ` · ${summary.canceled} canceled` : ""}
+          </div>
         </div>
         <div className="card stat">
           <div className="stat-value">{formatDuration(summary.medianRunMs)}</div>
@@ -132,7 +143,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                       {/* null means never retried — no evidence, which is
                           not the same as evidence of reliability. */}
                       {flake?.flakeRate === null || flake === undefined ? (
-                        <span className="muted" title="Never run twice on one commit">
+                        <span
+                          className="muted"
+                          title="Never run twice on one clean commit — dirty runs cannot be compared"
+                        >
                           —
                         </span>
                       ) : flake.flakeRate > 0 ? (

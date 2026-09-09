@@ -64,6 +64,25 @@ describe("execute", () => {
     expect(result.status).toBe("timed_out");
   });
 
+  it("stops on abort and does not resolve until the child is dead", async () => {
+    const aborter = new AbortController();
+    setTimeout(() => aborter.abort(), 200);
+
+    const result = await execute({
+      command: "sleep 30",
+      cwd,
+      timeoutSeconds: 60,
+      signal: aborter.signal,
+    });
+
+    // We killed it before it could answer, so it did not fail — reporting
+    // `failed` would blame the command for our interrupt.
+    expect(result.status).toBe("error");
+    // Resolving early would let the caller exit while the command kept
+    // running, detached, on the user's machine.
+    expect(result.durationMs).toBeLessThan(10_000);
+  });
+
   it("reports an unusable working directory as error, not failure", async () => {
     const result = await execute({
       command: "echo hi",

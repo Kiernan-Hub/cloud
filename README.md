@@ -110,12 +110,37 @@ A few deliberate choices that make the numbers trustworthy:
   deduplicated.
 - **A gate never run twice shows `—`, not `0%` flake rate.** No evidence is not
   evidence of reliability.
-- **A dirty working tree is labeled.** That result cannot be reproduced from
-  the commit alone, and the run page says so.
+- **A dirty working tree is labeled**, and its runs are left out of flake
+  detection entirely. Flakiness means the same input gave a different answer,
+  and a commit SHA does not identify the code when there are uncommitted
+  changes on top of it — otherwise editing a file between two runs would be
+  reported as the gate contradicting itself.
 - **A gate that could not execute is `error`, not `failed`**, and makes the
   whole run `error` rather than being quietly counted as a pass.
+- **A run that checked only some gates is `partial`, not `passed`.** The gates
+  it left out are recorded as `skipped`, so `--only lint` cannot later be
+  mistaken for a full green run.
+- **An interrupted run is `canceled`.** It established nothing, so it counts
+  neither for nor against the gates, and Ctrl-C kills the running gate's whole
+  process group rather than leaving a test runner going in the background.
 - **Truncated output says it was truncated.** The tail is kept, since that is
   where the failure is.
+
+### Run statuses
+
+| Status     | Meaning                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `passed`   | Every enabled gate ran, and nothing blocking failed.           |
+| `partial`  | Nothing failed, but not every enabled gate ran (`--only`).     |
+| `failed`   | A blocking gate ran and failed or timed out.                   |
+| `error`    | A blocking gate could not run at all — the verdict is unknown. |
+| `canceled` | Interrupted before reaching a verdict.                         |
+
+`partial` and `canceled` runs are excluded from the pass rate rather than
+counted as passes or failures, and the dashboard says how many there were so
+the denominator is never a mystery. Likewise, a `skipped` result does not
+touch a gate's own pass rate or duration percentiles — being left out of
+someone else's `--only` run says nothing about the gate.
 
 ## A note on trust
 

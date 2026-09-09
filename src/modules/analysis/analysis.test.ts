@@ -49,6 +49,19 @@ async function makeGate(
   return row!.id;
 }
 
+/** A run with no gate results — for run-level statuses like canceled. */
+async function makeRun(status: "running" | "canceled" | "partial") {
+  const at = nextTime();
+  await db.insert(checkRuns).values({
+    projectId: PROJECT,
+    commitSha: "z".repeat(40),
+    status,
+    startedAt: at,
+    finishedAt: status === "running" ? null : at,
+    durationMs: status === "running" ? null : 1000,
+  });
+}
+
 let clock = new Date("2026-01-01T00:00:00Z").getTime();
 function nextTime(): Date {
   clock += 60_000;
@@ -59,16 +72,19 @@ async function record(
   gateId: string,
   gateKey: string,
   commitSha: string,
-  status: "passed" | "failed" | "timed_out" | "error",
-  options?: { metricValue?: number; durationMs?: number },
+  status: "passed" | "failed" | "timed_out" | "skipped" | "error",
+  options?: { metricValue?: number; durationMs?: number; dirty?: boolean },
 ) {
   const at = nextTime();
+  const runStatus =
+    status === "passed" ? "passed" : status === "skipped" ? "partial" : "failed";
   const [run] = await db
     .insert(checkRuns)
     .values({
       projectId: PROJECT,
       commitSha,
-      status: status === "passed" ? "passed" : "failed",
+      status: runStatus,
+      dirty: options?.dirty ?? false,
       startedAt: at,
       finishedAt: at,
       durationMs: options?.durationMs ?? 1000,
@@ -156,6 +172,30 @@ describe("gateFlakiness", () => {
     const [entry] = await gateFlakiness(PROJECT);
     expect(entry!.commitsInconsistent).toBe(1);
   });
+
+  it("ignores dirty runs, where the commit does not identify the code", async () => {
+    const gateId = await makeGate("edited-between");
+    await record(gateId, "edited-between", "commit-a", "failed", { dirty: true });
+    await record(gateId, "edited-between", "commit-a", "passed", { dirty: true });
+
+    // The developer fixed the code between the two runs. Same commit SHA,
+    // different code — calling that a flaky gate sends them hunting for a
+    // problem that is not there.
+    expect(await gateFlakiness(PROJECT)).toEqual([]);
+  });
+
+  it("still flags a gate that disagrees with itself on a clean commit", async () => {
+    const gateId = await makeGate("really-flaky");
+    await record(gateId, "really-flaky", "commit-a", "passed");
+    await record(gateId, "really-flaky", "commit-a", "failed");
+    await record(gateId, "really-flaky", "commit-a", "passed", { dirty: true });
+
+    const [entry] = await gateFlakiness(PROJECT);
+
+    // The dirty attempt is discarded; the two clean ones still contradict.
+    expect(entry!.totalRuns).toBe(2);
+    expect(entry!.flakeRate).toBe(1);
+  });
 });
 
 describe("gateReliability", () => {
@@ -182,6 +222,30 @@ describe("gateReliability", () => {
     const [entry] = await gateReliability(PROJECT);
     expect(entry!.errored).toBe(1);
     expect(entry!.failed).toBe(1);
+  });
+
+  it("ignores skipped results, which say nothing about the gate", async () => {
+    const gateId = await makeGate("sometimes-skipped");
+    await record(gateId, "sometimes-skipped", "c1", "passed", { durationMs: 500 });
+    await record(gateId, "sometimes-skipped", "c2", "skipped", { durationMs: 0 });
+    await record(gateId, "sometimes-skipped", "c3", "skipped", { durationMs: 0 });
+
+    const [entry] = await gateReliability(PROJECT);
+
+    // Being left out of somebody else's `--only` run is not a mark against
+    // the gate. Counting it would drop this to 33% and pull the durations
+    // toward zero.
+    expect(entry!.runs).toBe(1);
+    expect(entry!.passRate).toBe(1);
+    expect(entry!.medianDurationMs).toBe(500);
+  });
+
+  it("omits a gate that has only ever been skipped rather than scoring it", async () => {
+    const gateId = await makeGate("never-run");
+    await record(gateId, "never-run", "c1", "skipped", { durationMs: 0 });
+
+    // No evidence means no row, not a 0% row.
+    expect(await gateReliability(PROJECT)).toEqual([]);
   });
 });
 
@@ -322,5 +386,41 @@ describe("projectSummary", () => {
     expect(summary.totalRuns).toBe(0);
     expect(summary.passRate).toBeNull();
     expect(summary.lastStatus).toBeNull();
+  });
+
+  it("keeps partial and canceled runs out of the pass rate but visible", async () => {
+    const gateId = await makeGate("g");
+    await record(gateId, "g", "c1", "passed");
+    await record(gateId, "g", "c2", "failed");
+    await record(gateId, "g", "c3", "skipped"); // makes a partial run
+    await makeRun("canceled");
+
+    const summary = await projectSummary(PROJECT);
+
+    // A partial run credits checks that never ran; a canceled run
+    // established nothing. Neither gets a vote...
+    expect(summary.passRate).toBe(0.5);
+    // ...but both are counted and named, not quietly dropped.
+    expect(summary.totalRuns).toBe(4);
+    expect(summary.partial).toBe(1);
+    expect(summary.canceled).toBe(1);
+  });
+
+  it("reports a null pass rate when every run was partial", async () => {
+    const gateId = await makeGate("g");
+    await record(gateId, "g", "c1", "skipped");
+
+    const summary = await projectSummary(PROJECT);
+
+    // Nothing has judged the full gate set, so there is no rate to report.
+    expect(summary.passRate).toBeNull();
+    expect(summary.partial).toBe(1);
+  });
+
+  it("excludes a still-running run from the totals", async () => {
+    await makeRun("running");
+
+    const summary = await projectSummary(PROJECT);
+    expect(summary.totalRuns).toBe(0);
   });
 });

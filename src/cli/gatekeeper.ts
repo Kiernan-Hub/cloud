@@ -26,7 +26,7 @@ import {
   upsertGate,
   upsertProject,
 } from "@/modules/projects";
-import { runChecks } from "@/modules/runs";
+import { RunCanceled, runChecks } from "@/modules/runs";
 
 const { values, positionals } = parseArgs({
   options: {
@@ -148,22 +148,57 @@ async function cmdRun(): Promise<number> {
     return 2;
   }
 
-  const summary = await runChecks({
-    projectId: config.project.id,
-    repoPath,
-    trigger,
-    only,
-    onGateStart: (gate) => out(`  … ${gate.name}`),
-  });
+  // Ctrl-C kills the running gate's process group and closes the run as
+  // canceled. Without this the gate command would carry on detached, and the
+  // run row would sit in 'running' forever — excluded from every statistic,
+  // so it would erase itself rather than report that it never finished.
+  const aborter = new AbortController();
+  // A holder rather than a bare `let`: the assignment happens in a callback,
+  // which control-flow analysis cannot see, so a plain variable narrows to
+  // `never` by the time the catch reads it.
+  const active: { runId: string | null } = { runId: null };
+  const interrupt = (signal: string) => {
+    if (aborter.signal.aborted) return;
+    err(`\nInterrupted (${signal}). Stopping the current gate…`);
+    aborter.abort();
+  };
+  const onSigint = () => interrupt("SIGINT");
+  const onSigterm = () => interrupt("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+
+  let summary;
+  try {
+    summary = await runChecks({
+      projectId: config.project.id,
+      repoPath,
+      trigger,
+      only,
+      signal: aborter.signal,
+      onRunStart: (id) => {
+        active.runId = id;
+      },
+      onGateStart: (gate) => out(`  … ${gate.name}`),
+    });
+  } catch (error: unknown) {
+    if (error instanceof RunCanceled) {
+      err(`Run ${active.runId?.slice(0, 8) ?? "?"} recorded as canceled.`);
+      return 130;
+    }
+    throw error;
+  } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+  }
 
   out("");
   for (const result of summary.results) {
     const icon = ICONS[result.status] ?? "?";
     const tag = result.blocking ? "" : " (non-blocking)";
     const metric = result.metricValue !== null ? `  [${result.metricValue}]` : "";
-    out(
-      `  ${icon} ${result.gateName.padEnd(20)} ${formatDuration(result.durationMs).padStart(8)}${metric}${tag}`,
-    );
+    const duration =
+      result.status === "skipped" ? "" : formatDuration(result.durationMs).padStart(8);
+    out(`  ${icon} ${result.gateName.padEnd(20)} ${duration}${metric}${tag}`);
   }
 
   out("");
@@ -172,10 +207,17 @@ async function cmdRun(): Promise<number> {
       `(run ${summary.runId.slice(0, 8)})`,
   );
 
-  if (summary.status !== "passed") {
-    const broken = summary.results.filter(
-      (result) => result.blocking && result.status !== "passed",
-    );
+  if (summary.skipped.length > 0) {
+    // Say what was not checked. A partial run that reads as a pass is the
+    // whole problem this status exists to avoid.
+    out(`  ${summary.skipped.length} gate(s) not run: ${summary.skipped.join(", ")}`);
+  }
+
+  const broken = summary.results.filter(
+    (result) =>
+      result.blocking && result.status !== "passed" && result.status !== "skipped",
+  );
+  if (broken.length > 0) {
     out("");
     for (const result of broken) {
       out(`  ${result.gateName}: ${result.status}, exit ${result.exitCode ?? "n/a"}`);
@@ -184,8 +226,10 @@ async function cmdRun(): Promise<number> {
     out("Full output: npm run dev  →  the dashboard shows captured logs.");
   }
 
-  // Non-zero on failure, so this works as a pre-push hook.
-  return summary.status === "passed" ? 0 : 1;
+  // Non-zero on failure, so this works as a pre-push hook. A partial run is
+  // not a failure: the caller asked for a subset and got it, and the record
+  // says which gates were left out.
+  return summary.status === "passed" || summary.status === "partial" ? 0 : 1;
 }
 
 async function cmdList(): Promise<number> {
