@@ -42,6 +42,8 @@ export type RunSummary = {
   runId: string;
   status: RunVerdict;
   commitSha: string;
+  /** Uncommitted changes were present, so the commit does not identify the code. */
+  dirty: boolean;
   durationMs: number;
   skipped: string[];
   results: {
@@ -250,6 +252,7 @@ export async function runChecks(options: RunOptions): Promise<RunSummary> {
       runId,
       status,
       commitSha: repo.commitSha,
+      dirty: repo.dirty,
       durationMs,
       skipped: skipped.map((gate) => gate.key),
       results: summaries,

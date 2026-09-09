@@ -9,6 +9,8 @@ import {
   gateReliability,
   metricHistory,
   projectSummary,
+  tallyAttempts,
+  type GateAttempt,
 } from "./index";
 
 const PROJECT = "test-analysis-project";
@@ -195,6 +197,86 @@ describe("gateFlakiness", () => {
     // The dirty attempt is discarded; the two clean ones still contradict.
     expect(entry!.totalRuns).toBe(2);
     expect(entry!.flakeRate).toBe(1);
+  });
+});
+
+describe("tallyAttempts", () => {
+  const attempt = (...statuses: GateAttempt["status"][]): GateAttempt[] =>
+    statuses.map((status, index) => ({
+      gateKey: `g${index}`,
+      gateName: `G${index}`,
+      status,
+    }));
+
+  it("flags a gate that both passed and failed across the burst", async () => {
+    const tally = tallyAttempts([
+      attempt("passed"),
+      attempt("failed"),
+      attempt("passed"),
+    ]);
+
+    // Same commit, same gate, two different answers.
+    expect(tally[0]!.inconsistent).toBe(true);
+    expect(tally[0]!.passed).toBe(2);
+    expect(tally[0]!.ran).toBe(3);
+  });
+
+  it("does not flag a gate that failed every time", async () => {
+    const tally = tallyAttempts([attempt("failed"), attempt("failed")]);
+
+    // Consistently failing is a real signal, not flakiness.
+    expect(tally[0]!.inconsistent).toBe(false);
+    expect(tally[0]!.passed).toBe(0);
+  });
+
+  it("does not flag a gate that passed every time", async () => {
+    const tally = tallyAttempts([attempt("passed"), attempt("passed")]);
+    expect(tally[0]!.inconsistent).toBe(false);
+  });
+
+  it("counts a timeout and an error as non-passes", async () => {
+    const tally = tallyAttempts([
+      attempt("passed"),
+      attempt("timed_out"),
+      attempt("error"),
+    ]);
+
+    // A gate that sometimes times out is disagreeing with itself just as
+    // much as one that sometimes fails.
+    expect(tally[0]!.inconsistent).toBe(true);
+    expect(tally[0]!.ran).toBe(3);
+  });
+
+  it("leaves out a gate that was skipped every time", async () => {
+    // No attempts is not the same as no failures, so it gets no 0/0 row.
+    expect(tallyAttempts([attempt("skipped"), attempt("skipped")])).toEqual([]);
+  });
+
+  it("does not let a skipped attempt count against a gate", async () => {
+    const tally = tallyAttempts([
+      attempt("passed"),
+      attempt("skipped"),
+      attempt("passed"),
+    ]);
+
+    expect(tally[0]!.ran).toBe(2);
+    expect(tally[0]!.inconsistent).toBe(false);
+  });
+
+  it("tallies each gate separately", async () => {
+    const tally = tallyAttempts([
+      [
+        { gateKey: "lint", gateName: "Lint", status: "passed" },
+        { gateKey: "test", gateName: "Tests", status: "failed" },
+      ],
+      [
+        { gateKey: "lint", gateName: "Lint", status: "passed" },
+        { gateKey: "test", gateName: "Tests", status: "passed" },
+      ],
+    ]);
+
+    expect(tally.find((entry) => entry.gateKey === "lint")!.inconsistent).toBe(false);
+    expect(tally.find((entry) => entry.gateKey === "test")!.inconsistent).toBe(true);
   });
 });
 

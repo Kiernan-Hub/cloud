@@ -14,7 +14,7 @@ have actually been doing.
   records every result with the commit it ran against.
 - **Detects flaky gates**: the same gate on the same commit producing both a
   pass and a fail. Same input, different answer — that is a gate problem, not
-  a code problem.
+  a code problem. `--repeat` hunts one on demand.
 - **Detects regressions**: extracts a number from a gate's output (coverage,
   bundle size, test count) and tells you when it moves the wrong way.
 - Shows pass rates, p95 durations, and captured output for every run.
@@ -51,6 +51,36 @@ Then start the dashboard:
 ```bash
 npm run dev     # http://localhost:3000
 ```
+
+## Hunting a flaky gate
+
+A gate that fails once and passes on a re-run is the most expensive kind: it
+trains everyone to re-run instead of to read. `--repeat` is the deliberate
+version of the measurement the tool is built on — run the same gates, the same
+number of times, on one commit, and see whether they agree with themselves:
+
+```bash
+gatekeeper run --only test --repeat 10
+```
+
+```
+  ✓ Steady               10/10 passed
+  ~ Coinflip              4/10 passed  — disagreed with itself
+
+FLAKY on e37a3de2: 1 gate(s) gave different answers across 10 attempts.
+Same commit, same input, different result — that is a gate problem.
+```
+
+Exits non-zero when a gate disagrees with itself: finding the flake is the
+point, so it is reported as a finding.
+
+**Commit or stash first.** The claim rests on the input being held still, so
+if the working tree is dirty Gatekeeper says what it saw but refuses to call
+it flakiness — the commit does not identify the code that ran, and those
+attempts are excluded from flake detection entirely.
+
+Every attempt is stored, so the burst also feeds the flake rate on the
+dashboard rather than being a one-off report.
 
 To read a run's output without leaving the terminal:
 

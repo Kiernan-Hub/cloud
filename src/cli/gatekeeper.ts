@@ -2,7 +2,7 @@
 //
 //   gatekeeper init  [--repo <path>]   write a starter gatekeeper.json
 //   gatekeeper sync  [--repo <path>]   register the project and its gates
-//   gatekeeper run   [--repo <path>] [--only lint,test]
+//   gatekeeper run   [--repo <path>] [--only lint,test] [--repeat N]
 //   gatekeeper show  [run-id]          replay a run's captured output
 //   gatekeeper list                    show registered projects
 //
@@ -21,19 +21,27 @@ import {
 } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
+import { tallyAttempts } from "@/modules/analysis";
 import {
   listProjects,
   removeGatesNotIn,
   upsertGate,
   upsertProject,
 } from "@/modules/projects";
-import { getRun, latestRun, RunCanceled, runChecks } from "@/modules/runs";
+import {
+  getRun,
+  latestRun,
+  RunCanceled,
+  runChecks,
+  type RunSummary,
+} from "@/modules/runs";
 
 const { values, positionals } = parseArgs({
   options: {
     repo: { type: "string" },
     only: { type: "string" },
     trigger: { type: "string", default: "manual" },
+    repeat: { type: "string" },
     all: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
@@ -45,10 +53,11 @@ gatekeeper — run and track your project's quality gates
 
   gatekeeper init   [--repo <path>]        write a starter ${GATEFILE_NAME}
   gatekeeper sync   [--repo <path>]        register the project and its gates
-  gatekeeper run    [--repo <path>] [--only lint,test]
+  gatekeeper run    [--repo <path>] [--only lint,test] [--repeat N]
   gatekeeper show   [run-id] [--all]       replay a run's captured output
   gatekeeper list                          list registered projects
 
+--repeat runs the gates N times on one commit to hunt a flaky gate.
 --repo defaults to the current directory.
 show defaults to the latest run, and to the gates that did not pass.
 run exits non-zero if a blocking gate fails.
@@ -58,6 +67,10 @@ const out = (text: string) => process.stdout.write(`${text}\n`);
 const err = (text: string) => process.stderr.write(`${text}\n`);
 
 const repoPath = resolve(values.repo ?? process.cwd());
+
+// A ceiling on --repeat. Each attempt runs the real gate commands, so a
+// mistyped number is somebody's afternoon.
+const MAX_REPEAT = 50;
 
 const ICONS: Record<string, string> = {
   passed: "✓",
@@ -166,6 +179,12 @@ async function cmdRun(): Promise<number> {
     return 2;
   }
 
+  const repeat = Number(values.repeat ?? 1);
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > MAX_REPEAT) {
+    err(`--repeat must be a whole number from 1 to ${MAX_REPEAT}`);
+    return 2;
+  }
+
   // Ctrl-C kills the running gate's process group and closes the run as
   // canceled. Without this the gate command would carry on detached, and the
   // run row would sit in 'running' forever — excluded from every statistic,
@@ -185,19 +204,24 @@ async function cmdRun(): Promise<number> {
   process.on("SIGINT", onSigint);
   process.on("SIGTERM", onSigterm);
 
-  let summary;
+  const attempts: RunSummary[] = [];
   try {
-    summary = await runChecks({
-      projectId: config.project.id,
-      repoPath,
-      trigger,
-      only,
-      signal: aborter.signal,
-      onRunStart: (id) => {
-        active.runId = id;
-      },
-      onGateStart: (gate) => out(`  … ${gate.name}`),
-    });
+    for (let attempt = 1; attempt <= repeat; attempt += 1) {
+      if (repeat > 1) out(`Attempt ${attempt}/${repeat}`);
+      attempts.push(
+        await runChecks({
+          projectId: config.project.id,
+          repoPath,
+          trigger,
+          only,
+          signal: aborter.signal,
+          onRunStart: (id) => {
+            active.runId = id;
+          },
+          onGateStart: (gate) => out(`  … ${gate.name}`),
+        }),
+      );
+    }
   } catch (error: unknown) {
     if (error instanceof RunCanceled) {
       err(`Run ${active.runId?.slice(0, 8) ?? "?"} recorded as canceled.`);
@@ -208,6 +232,10 @@ async function cmdRun(): Promise<number> {
     process.off("SIGINT", onSigint);
     process.off("SIGTERM", onSigterm);
   }
+
+  if (repeat > 1) return reportRepeats(attempts);
+
+  const summary = attempts[0]!;
 
   out("");
   for (const result of summary.results) {
@@ -241,13 +269,71 @@ async function cmdRun(): Promise<number> {
       out(`  ${result.gateName}: ${result.status}, exit ${result.exitCode ?? "n/a"}`);
     }
     out("");
-    out("Full output: npm run dev  →  the dashboard shows captured logs.");
+    out(`Full output: gatekeeper show ${summary.runId.slice(0, 8)}`);
   }
 
   // Non-zero on failure, so this works as a pre-push hook. A partial run is
   // not a failure: the caller asked for a subset and got it, and the record
   // says which gates were left out.
   return summary.status === "passed" || summary.status === "partial" ? 0 : 1;
+}
+
+/**
+ * Report what repeating the gates actually established.
+ *
+ * Running the same gate on the same commit is the only way to catch one that
+ * disagrees with itself, so this is the deliberate version of the measurement
+ * the tool is built around. The verdict it can offer depends entirely on
+ * whether the input was really held still — see the dirty-tree case below.
+ */
+function reportRepeats(attempts: RunSummary[]): number {
+  const tally = tallyAttempts(attempts.map((attempt) => attempt.results));
+  const disagreed = tally.filter((entry) => entry.inconsistent);
+
+  out("");
+  for (const entry of tally) {
+    const icon = entry.inconsistent ? "~" : entry.passed === entry.ran ? "✓" : "✗";
+    out(
+      `  ${icon} ${entry.gateName.padEnd(20)} ${entry.passed}/${entry.ran} passed` +
+        (entry.inconsistent ? "  — disagreed with itself" : ""),
+    );
+  }
+
+  out("");
+  const commit = attempts[0]!.commitSha.slice(0, 8);
+
+  if (attempts[0]!.dirty) {
+    // The whole point of repeating is holding the input still. A dirty tree
+    // means it was not held still, so none of this counts as flake evidence
+    // and the stored results are excluded from flake detection. Saying
+    // "consistent" here would be the exact false confidence the tool exists
+    // to remove.
+    out(`Ran ${attempts.length} times, but the working tree is dirty.`);
+    out("These attempts prove nothing about flakiness: the commit does not");
+    out("identify the code that ran. Commit or stash, then repeat.");
+    return worstExitCode(attempts);
+  }
+
+  if (disagreed.length > 0) {
+    out(
+      `FLAKY on ${commit}: ${disagreed.length} gate(s) gave different answers ` +
+        `across ${attempts.length} attempts.`,
+    );
+    out("Same commit, same input, different result — that is a gate problem.");
+    // Finding the flake is the goal, so it is reported as a finding.
+    return 1;
+  }
+
+  out(`CONSISTENT across ${attempts.length} attempts on ${commit}.`);
+  return worstExitCode(attempts);
+}
+
+function worstExitCode(attempts: RunSummary[]): number {
+  return attempts.every(
+    (attempt) => attempt.status === "passed" || attempt.status === "partial",
+  )
+    ? 0
+    : 1;
 }
 
 /**

@@ -32,6 +32,20 @@ async function recordRun(
   });
 }
 
+/**
+ * The ids this file's fixtures own, in due order.
+ *
+ * projectsDueForRun is deliberately global — it answers "what should the
+ * worker do now" — so a test must not assert on the whole list. Any other
+ * project registered on this machine would otherwise break it.
+ */
+async function dueIds(): Promise<string[]> {
+  const due = await projectsDueForRun();
+  return due
+    .map((project) => project.id)
+    .filter((id) => id === SCHEDULED || id === MANUAL);
+}
+
 beforeEach(cleanup);
 
 afterAll(async () => {
@@ -45,7 +59,7 @@ describe("projectsDueForRun", () => {
 
     // The worker executes the repo's own commands on this machine. Doing
     // that unasked, on a loop, is not a surprise anyone should discover.
-    expect(await projectsDueForRun()).toEqual([]);
+    expect(await dueIds()).toEqual([]);
   });
 
   it("returns a scheduled project that has never run", async () => {
@@ -56,9 +70,9 @@ describe("projectsDueForRun", () => {
       scheduleMinutes: 60,
     });
 
+    expect(await dueIds()).toEqual([SCHEDULED]);
     const due = await projectsDueForRun();
-    expect(due.map((project) => project.id)).toEqual([SCHEDULED]);
-    expect(due[0]!.lastFullRunAt).toBeNull();
+    expect(due.find((project) => project.id === SCHEDULED)!.lastFullRunAt).toBeNull();
   });
 
   it("holds off until the interval has elapsed", async () => {
@@ -70,11 +84,11 @@ describe("projectsDueForRun", () => {
     });
     await recordRun(SCHEDULED, "passed", 30);
 
-    expect(await projectsDueForRun()).toEqual([]);
+    expect(await dueIds()).toEqual([]);
 
     await recordRun(SCHEDULED, "passed", 61);
     // The most recent full run is still 30 minutes ago, so still not due.
-    expect(await projectsDueForRun()).toEqual([]);
+    expect(await dueIds()).toEqual([]);
   });
 
   it("comes due once the interval has passed", async () => {
@@ -86,7 +100,7 @@ describe("projectsDueForRun", () => {
     });
     await recordRun(SCHEDULED, "passed", 61);
 
-    expect((await projectsDueForRun()).map((p) => p.id)).toEqual([SCHEDULED]);
+    expect(await dueIds()).toEqual([SCHEDULED]);
   });
 
   it("counts a failed run — the schedule is about cadence, not success", async () => {
@@ -99,7 +113,7 @@ describe("projectsDueForRun", () => {
     await recordRun(SCHEDULED, "failed", 10);
 
     // A failing gate suite must not be re-run every tick just for failing.
-    expect(await projectsDueForRun()).toEqual([]);
+    expect(await dueIds()).toEqual([]);
   });
 
   it("does not let a partial run reset the clock", async () => {
@@ -113,7 +127,7 @@ describe("projectsDueForRun", () => {
 
     // A partial run left gates unchecked, so it is not a substitute for the
     // scheduled sweep over the full gate set.
-    expect((await projectsDueForRun()).map((p) => p.id)).toEqual([SCHEDULED]);
+    expect(await dueIds()).toEqual([SCHEDULED]);
   });
 
   it("does not let a canceled or still-running run reset the clock", async () => {
@@ -128,7 +142,7 @@ describe("projectsDueForRun", () => {
 
     // Neither established anything, so neither is evidence the project was
     // checked.
-    expect((await projectsDueForRun()).map((p) => p.id)).toEqual([SCHEDULED]);
+    expect(await dueIds()).toEqual([SCHEDULED]);
   });
 
   it("rejects a schedule too short to be a schedule", async () => {
@@ -147,11 +161,11 @@ describe("projectsDueForRun", () => {
   it("turns scheduling back off when the config drops it", async () => {
     const base = { id: SCHEDULED, name: "Scheduled", repoPath: "/tmp/scheduled" };
     await upsertProject({ ...base, scheduleMinutes: 60 });
-    expect(await projectsDueForRun()).toHaveLength(1);
+    expect(await dueIds()).toEqual([SCHEDULED]);
 
     // Removing the field from gatekeeper.json must actually stop the worker,
     // not leave the old cadence running invisibly.
     await upsertProject(base);
-    expect(await projectsDueForRun()).toEqual([]);
+    expect(await dueIds()).toEqual([]);
   });
 });

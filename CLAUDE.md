@@ -38,7 +38,8 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
    destroy the only evidence a flaky gate leaves. The claim rests on those
    attempts having had the _same input_, so runs from a dirty working tree are
    not admissible: a commit SHA does not identify the code when there are
-   uncommitted changes on top of it.
+   uncommitted changes on top of it. `gk run --repeat N` is the deliberate
+   version of this — gather the evidence on purpose rather than waiting for it.
 2. **Distinguish kinds of failure.** `failed` (ran, found a problem),
    `timed_out` (never finished), and `error` (could not run at all) need
    different responses from a human, so they are different statuses. A gate

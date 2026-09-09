@@ -82,6 +82,62 @@ export async function gateFlakiness(projectId: string): Promise<GateFlakiness[]>
   }));
 }
 
+/**
+ * One gate's behaviour across a deliberate burst of repeats.
+ *
+ * `gateFlakiness` reads history out of the database; this reads a single
+ * flake-hunting session that just happened, before anyone asks the database
+ * anything. The two agree on what flaky means: it disagreed with itself.
+ */
+export type GateAttempt = {
+  gateKey: string;
+  gateName: string;
+  status: "passed" | "failed" | "timed_out" | "skipped" | "error";
+};
+
+export type AttemptTally = {
+  gateKey: string;
+  gateName: string;
+  /** Attempts that actually ran. Skipped ones are not attempts. */
+  ran: number;
+  passed: number;
+  /** It both passed and did not pass — the same input, two answers. */
+  inconsistent: boolean;
+};
+
+/**
+ * Tally repeated attempts at the same gates on one commit.
+ *
+ * A gate that never ran (every attempt skipped) is left out rather than
+ * reported as 0/0: no attempts is not the same as no failures.
+ */
+export function tallyAttempts(attempts: GateAttempt[][]): AttemptTally[] {
+  const byKey = new Map<string, AttemptTally>();
+
+  for (const attempt of attempts) {
+    for (const result of attempt) {
+      if (result.status === "skipped") continue;
+
+      const entry = byKey.get(result.gateKey) ?? {
+        gateKey: result.gateKey,
+        gateName: result.gateName,
+        ran: 0,
+        passed: 0,
+        inconsistent: false,
+      };
+      entry.ran += 1;
+      if (result.status === "passed") entry.passed += 1;
+      byKey.set(result.gateKey, entry);
+    }
+  }
+
+  for (const entry of byKey.values()) {
+    entry.inconsistent = entry.passed > 0 && entry.passed < entry.ran;
+  }
+
+  return [...byKey.values()];
+}
+
 // ---------------------------------------------------------------------------
 // What blocks you
 // ---------------------------------------------------------------------------
