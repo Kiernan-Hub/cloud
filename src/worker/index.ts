@@ -17,7 +17,7 @@ import { getConfig } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { projectsDueForRun } from "@/modules/projects";
-import { reconcileAbandonedRuns, runChecks } from "@/modules/runs";
+import { pruneOutput, reconcileAbandonedRuns, runChecks } from "@/modules/runs";
 
 // How old an unfinished run must be before the worker declares it abandoned.
 // A SIGKILL leaves no handler to clean up, so those rows can only be found by
@@ -31,6 +31,9 @@ let activeWork: Promise<unknown> = Promise.resolve();
 
 async function tick(): Promise<void> {
   await reconcileAbandonedRuns(ABANDONED_AFTER_MS);
+  // Housekeeping, not deletion: the results stay, only their captured output
+  // ages out. See pruneOutput for why the two are treated differently.
+  await pruneOutput(getConfig().OUTPUT_RETENTION_DAYS);
 
   const due = await projectsDueForRun();
   if (due.length === 0) {

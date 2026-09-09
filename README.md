@@ -128,6 +128,29 @@ does a `canceled` or still-running one. The minimum interval is 5 minutes: a
 gate suite slower than its own cadence would run back-to-back forever, which
 is a busy loop wearing a schedule's clothes.
 
+## Retention
+
+Gate results are **never deleted**. They are the flake evidence, the pass
+rates and the regression history, and they are tiny.
+
+Their _captured output_ is a different thing: a debugging aid with a short
+useful life, and almost all of the bytes — up to 128 KB per result, which on
+an hourly schedule is gigabytes a year. So it ages out after 30 days by
+default, while the results stay forever.
+
+```bash
+gatekeeper prune --dry-run    # how much output is stored, and what would go
+gatekeeper prune              # drop output older than OUTPUT_RETENTION_DAYS
+gatekeeper prune --days 7     # or a window you pick
+```
+
+The worker does this on its own tick too. Set `OUTPUT_RETENTION_DAYS=0` to
+keep output forever.
+
+A pruned result says so — the run page and `gatekeeper show` report "output
+aged out of retention" rather than "no output captured", because the gate did
+print something and it was our housekeeping that discarded it.
+
 ## Configuring gates
 
 `gatekeeper.json` in the repo root:
@@ -169,14 +192,14 @@ is a busy loop wearing a schedule's clothes.
 
 ## Scripts
 
-| Command                                 | What it does                               |
-| --------------------------------------- | ------------------------------------------ |
-| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `show`, `list` |
-| `npm run dev`                           | Dashboard at localhost:3000                |
-| `npm run worker`                        | Runs projects that set a `scheduleMinutes` |
-| `npm test`                              | Unit + integration tests (needs Postgres)  |
-| `npm run lint` / `typecheck` / `format` | Checks                                     |
-| `npm run db:migrate`                    | Apply migrations                           |
+| Command                                 | What it does                                        |
+| --------------------------------------- | --------------------------------------------------- |
+| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `show`, `prune`, `list` |
+| `npm run dev`                           | Dashboard at localhost:3000                         |
+| `npm run worker`                        | Runs projects that set a `scheduleMinutes`          |
+| `npm test`                              | Unit + integration tests (needs Postgres)           |
+| `npm run lint` / `typecheck` / `format` | Checks                                              |
+| `npm run db:migrate`                    | Apply migrations                                    |
 
 ## How it reports things
 
@@ -202,6 +225,8 @@ A few deliberate choices that make the numbers trustworthy:
   process group rather than leaving a test runner going in the background.
 - **Truncated output says it was truncated.** The tail is kept, since that is
   where the failure is.
+- **Output that aged out of retention says so**, rather than reading as a gate
+  that printed nothing. Results are never deleted — only their output.
 
 ### Run statuses
 

@@ -102,7 +102,11 @@ export default async function RunPage({ params }: PageProps<"/runs/[runId]">) {
               <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
                 {result.status === "skipped"
                   ? "Excluded from this run."
-                  : "No output captured."}
+                  : result.outputPruned
+                    ? // Output existed; retention dropped it. Saying "no output"
+                      // would blame the gate for our housekeeping.
+                      "Output aged out of retention — the result itself is kept."
+                    : "No output captured."}
               </p>
             )}
           </div>

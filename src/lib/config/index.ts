@@ -10,6 +10,11 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   /** How often the worker looks for projects due a scheduled run. */
   WORKER_TICK_SECONDS: z.coerce.number().int().positive().default(60),
+
+  // How long captured gate output is kept. Results themselves are never
+  // deleted — they are the flake evidence — but their output is most of the
+  // bytes and has a short useful life. 0 keeps output forever.
+  OUTPUT_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

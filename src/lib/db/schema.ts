@@ -209,6 +209,14 @@ export const gateResults = pgTable(
     stderrTail: text("stderr_tail"),
     truncated: boolean("truncated").notNull().default(false),
 
+    // Output is dropped after a retention window; the row itself is kept
+    // forever, because the status is the flake evidence and deleting it would
+    // destroy the measurement. This flag is what keeps that honest: without
+    // it, a pruned result is indistinguishable from a gate that printed
+    // nothing, and the UI would claim there was no output rather than
+    // admitting we discarded it.
+    outputPruned: boolean("output_pruned").notNull().default(false),
+
     metricValue: numeric("metric_value"),
 
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -220,6 +228,11 @@ export const gateResults = pgTable(
     uniqueIndex("one_result_per_gate_per_run").on(table.runId, table.gateId),
     index("results_gate_history_idx").on(table.gateId, table.startedAt),
     index("results_flake_idx").on(table.projectId, table.gateKey, table.commitSha),
+    // Retention sweeps run often and usually find nothing, so they should not
+    // have to scan rows already pruned.
+    index("results_prunable_idx")
+      .on(table.startedAt)
+      .where(sql`NOT output_pruned`),
     check("non_negative_duration", sql`${table.durationMs} >= 0`),
   ],
 );

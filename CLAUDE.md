@@ -63,6 +63,9 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
   report that it failed to finish.
 - Bound everything that touches the outside world — timeouts on commands,
   caps on captured output, kills that take the whole process group.
+- Prune bytes, never evidence. Captured output ages out; gate results do not,
+  because the status is the measurement. Anything discarded says it was
+  discarded rather than reading as absence.
 - Small, reversible decisions, written down when non-obvious.
 - Structured logs with a run ID on every line.
 

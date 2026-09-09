@@ -322,6 +322,56 @@ export async function reconcileAbandonedRuns(olderThanMs: number): Promise<numbe
 // Reads
 // ---------------------------------------------------------------------------
 
+/**
+ * Drop captured output older than the retention window, keeping the rows.
+ *
+ * The split is deliberate. A gate result's *status* is the evidence — it is
+ * what flake detection, pass rates and regressions are computed from, it is
+ * tiny, and deleting it would destroy the measurement this tool exists to
+ * take. The captured *output* is a debugging aid with a short useful life and
+ * is almost all of the bytes: up to 128 KB per result, which on an hourly
+ * schedule is gigabytes a year.
+ *
+ * So the bytes go and the evidence stays, and `outputPruned` records that the
+ * output existed and we discarded it — rather than letting it read as a gate
+ * that printed nothing.
+ */
+export async function pruneOutput(olderThanDays: number): Promise<number> {
+  if (olderThanDays <= 0) return 0; // 0 means keep output forever.
+
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .update(gateResults)
+    .set({ stdoutTail: null, stderrTail: null, outputPruned: true })
+    .where(
+      and(
+        lt(gateResults.startedAt, cutoff),
+        eq(gateResults.outputPruned, false),
+        sql`(${gateResults.stdoutTail} IS NOT NULL OR ${gateResults.stderrTail} IS NOT NULL)`,
+      ),
+    )
+    .returning({ id: gateResults.id });
+
+  if (rows.length > 0) {
+    logger.info("pruned captured output", {
+      results: rows.length,
+      older_than_days: olderThanDays,
+    });
+  }
+  return rows.length;
+}
+
+/** How much captured output is currently stored, for reporting before a prune. */
+export async function storedOutputBytes(): Promise<number> {
+  const [row] = await db.execute<{ bytes: string | null }>(sql`
+    SELECT SUM(
+      COALESCE(LENGTH(stdout_tail), 0) + COALESCE(LENGTH(stderr_tail), 0)
+    )::bigint AS bytes
+    FROM gate_results
+  `);
+  return Number(row?.bytes ?? 0);
+}
+
 /** The most recent run for a project, whatever its status. */
 export async function latestRun(projectId: string): Promise<CheckRun | null> {
   const [row] = await db

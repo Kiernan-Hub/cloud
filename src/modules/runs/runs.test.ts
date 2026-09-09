@@ -7,15 +7,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db, sqlClient } from "@/lib/db";
-import { checkRuns } from "@/lib/db/schema";
+import { checkRuns, gateResults } from "@/lib/db/schema";
 import { upsertGate, upsertProject } from "@/modules/projects";
 import {
   getRun,
   listRuns,
+  pruneOutput,
   reconcileAbandonedRuns,
   RunCanceled,
   runChecks,
@@ -347,6 +348,65 @@ describe("a run always reaches a terminal status", () => {
     expect((await getRun(old!.id))!.run.status).toBe("canceled");
     // Closing a run that is genuinely still going would be the worse lie.
     expect((await getRun(fresh!.id))!.run.status).toBe("running");
+  });
+});
+
+describe("pruneOutput", () => {
+  /** Backdate a run and its results, so retention has something old to find. */
+  async function backdate(runId: string, days: number) {
+    const at = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    await db.update(checkRuns).set({ startedAt: at }).where(eq(checkRuns.id, runId));
+    await db
+      .update(gateResults)
+      .set({ startedAt: at })
+      .where(eq(gateResults.runId, runId));
+  }
+
+  it("drops old output but keeps the result that is the evidence", async () => {
+    await upsertGate(PROJECT, { key: "noisy", name: "Noisy", command: "echo loud" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+    await backdate(summary.runId, 40);
+
+    expect(await pruneOutput(30)).toBe(1);
+
+    const found = await getRun(summary.runId);
+    const [result] = found!.results;
+    expect(result!.stdoutTail).toBeNull();
+    // The status is what flake detection, pass rates and regressions are
+    // computed from. Deleting it would destroy the measurement.
+    expect(result!.status).toBe("passed");
+    expect(result!.durationMs).toBeGreaterThanOrEqual(0);
+    // And the row says the output was discarded, not that there was none.
+    expect(result!.outputPruned).toBe(true);
+  });
+
+  it("leaves output inside the retention window alone", async () => {
+    await upsertGate(PROJECT, { key: "recent", name: "Recent", command: "echo hi" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+    await backdate(summary.runId, 3);
+
+    expect(await pruneOutput(30)).toBe(0);
+    expect((await getRun(summary.runId))!.results[0]!.stdoutTail).toContain("hi");
+  });
+
+  it("keeps output forever when retention is zero", async () => {
+    await upsertGate(PROJECT, { key: "kept", name: "Kept", command: "echo hi" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+    await backdate(summary.runId, 9999);
+
+    // 0 is an explicit "never prune", not a zero-day window that deletes
+    // everything — the difference matters a great deal to whoever set it.
+    expect(await pruneOutput(0)).toBe(0);
+    expect((await getRun(summary.runId))!.results[0]!.stdoutTail).toContain("hi");
+  });
+
+  it("does not re-report rows it already pruned", async () => {
+    await upsertGate(PROJECT, { key: "once", name: "Once", command: "echo hi" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+    await backdate(summary.runId, 40);
+
+    expect(await pruneOutput(30)).toBe(1);
+    expect(await pruneOutput(30)).toBe(0);
   });
 });
 

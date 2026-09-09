@@ -4,6 +4,7 @@
 //   gatekeeper sync  [--repo <path>]   register the project and its gates
 //   gatekeeper run   [--repo <path>] [--only lint,test] [--repeat N]
 //   gatekeeper show  [run-id]          replay a run's captured output
+//   gatekeeper prune [--days N]        age out captured output, keeping results
 //   gatekeeper list                    show registered projects
 //
 // `run` exits non-zero when a blocking gate fails, so it works as a git hook
@@ -17,6 +18,7 @@ import {
   exampleGatefile,
   GATEFILE_NAME,
   GatefileError,
+  getConfig,
   loadGatefile,
 } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
@@ -31,8 +33,10 @@ import {
 import {
   getRun,
   latestRun,
+  pruneOutput,
   RunCanceled,
   runChecks,
+  storedOutputBytes,
   type RunSummary,
 } from "@/modules/runs";
 
@@ -43,6 +47,8 @@ const { values, positionals } = parseArgs({
     trigger: { type: "string", default: "manual" },
     repeat: { type: "string" },
     all: { type: "boolean", default: false },
+    days: { type: "string" },
+    "dry-run": { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
   allowPositionals: true,
@@ -55,11 +61,13 @@ gatekeeper — run and track your project's quality gates
   gatekeeper sync   [--repo <path>]        register the project and its gates
   gatekeeper run    [--repo <path>] [--only lint,test] [--repeat N]
   gatekeeper show   [run-id] [--all]       replay a run's captured output
+  gatekeeper prune  [--days N] [--dry-run] age out captured output
   gatekeeper list                          list registered projects
 
 --repeat runs the gates N times on one commit to hunt a flaky gate.
 --repo defaults to the current directory.
 show defaults to the latest run, and to the gates that did not pass.
+prune drops stored output only; result rows are never deleted.
 run exits non-zero if a blocking gate fails.
 `;
 
@@ -401,7 +409,15 @@ async function cmdShow(): Promise<number> {
     const output = [result.stdoutTail, result.stderrTail]
       .filter((part) => part && part.trim())
       .join("\n");
-    if (!output) continue;
+
+    if (!output) {
+      // Distinguish "printed nothing" from "we discarded it".
+      if (result.outputPruned) {
+        out("");
+        out(`── ${result.gateKey}: output aged out of retention.`);
+      }
+      continue;
+    }
 
     out("");
     out(`── ${result.gateKey} ${"─".repeat(Math.max(0, 60 - result.gateKey.length))}`);
@@ -416,6 +432,45 @@ async function cmdShow(): Promise<number> {
   }
 
   return 0;
+}
+
+/**
+ * Age out captured output without touching the results themselves.
+ *
+ * Worth being able to run by hand: someone who never starts the worker still
+ * accumulates output, and someone about to prune deserves to see how much is
+ * there first.
+ */
+async function cmdPrune(): Promise<number> {
+  const days = Number(values.days ?? getConfig().OUTPUT_RETENTION_DAYS);
+  if (!Number.isInteger(days) || days < 1) {
+    err("--days must be a whole number of days, 1 or more");
+    return 2;
+  }
+
+  const before = await storedOutputBytes();
+
+  if (values["dry-run"]) {
+    out(`${formatBytes(before)} of captured output stored.`);
+    out(`Would drop output from results older than ${days} day(s).`);
+    out("Results themselves are never deleted — they are the flake evidence.");
+    return 0;
+  }
+
+  const pruned = await pruneOutput(days);
+  const after = await storedOutputBytes();
+
+  out(`Pruned output from ${pruned} result(s) older than ${days} day(s).`);
+  out(`Captured output: ${formatBytes(before)} → ${formatBytes(after)}.`);
+  // Say what survived, so this does not read as data loss.
+  out("Every result row was kept; only their captured output aged out.");
+  return 0;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function cmdList(): Promise<number> {
@@ -452,6 +507,8 @@ async function main(): Promise<number> {
       return cmdRun();
     case "show":
       return cmdShow();
+    case "prune":
+      return cmdPrune();
     case "list":
       return cmdList();
     default:
