@@ -5,7 +5,7 @@
 // src/cli/sync-config.ts), so the command strings are trusted input from the
 // person running the tool — the same trust level as a Makefile or a CI YAML.
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { gates, projects } from "@/lib/db/schema";
@@ -42,27 +42,76 @@ export async function upsertProject(input: {
   name: string;
   repoPath: string;
   defaultBranch?: string;
+  scheduleMinutes?: number | null;
 }): Promise<Project> {
+  const values = {
+    id: input.id,
+    name: input.name,
+    repoPath: input.repoPath,
+    defaultBranch: input.defaultBranch ?? "main",
+    scheduleMinutes: input.scheduleMinutes ?? null,
+  };
+
   const [row] = await db
     .insert(projects)
-    .values({
-      id: input.id,
-      name: input.name,
-      repoPath: input.repoPath,
-      defaultBranch: input.defaultBranch ?? "main",
-    })
+    .values(values)
     .onConflictDoUpdate({
       target: projects.id,
-      set: {
-        name: input.name,
-        repoPath: input.repoPath,
-        defaultBranch: input.defaultBranch ?? "main",
-        updatedAt: new Date(),
-      },
+      set: { ...values, updatedAt: new Date() },
     })
     .returning();
 
   return row!;
+}
+
+export type DueProject = Project & {
+  /** The last run that judged the full gate set, or null if there is none. */
+  lastFullRunAt: Date | null;
+};
+
+/**
+ * Projects the worker should run now.
+ *
+ * "Due" is measured from the last run that judged the *full* gate set. A
+ * partial run deliberately does not reset the clock: it left gates unchecked,
+ * so it is not a substitute for the scheduled sweep. Neither does a canceled
+ * or still-running one, which established nothing yet.
+ *
+ * A project with no `scheduleMinutes` is never returned. Scheduled runs
+ * execute the repo's own commands, so they happen only where the repo's
+ * config asked for them.
+ */
+export async function projectsDueForRun(now = new Date()): Promise<DueProject[]> {
+  const rows = await db
+    .select({
+      project: projects,
+      // A `partial` or `canceled` run is not in this list, so it cannot
+      // satisfy a schedule it never actually checked the gate set for.
+      // The column is written out rather than interpolated: drizzle emits a
+      // bare "id" inside a raw fragment, which the subquery would resolve
+      // against check_runs instead of projects.
+      lastFullRunAt: sql<Date | null>`(
+        SELECT MAX(r.started_at)
+        FROM check_runs r
+        WHERE r.project_id = "projects"."id"
+          AND r.status IN ('passed', 'failed', 'error')
+      )`,
+    })
+    .from(projects)
+    .where(sql`${projects.scheduleMinutes} IS NOT NULL`)
+    .orderBy(asc(projects.name));
+
+  return rows
+    .map((row) => ({
+      ...row.project,
+      lastFullRunAt: row.lastFullRunAt === null ? null : new Date(row.lastFullRunAt),
+    }))
+    .filter((project) => {
+      // Never run on this schedule before: due immediately.
+      if (project.lastFullRunAt === null) return true;
+      const dueAt = project.lastFullRunAt.getTime() + project.scheduleMinutes! * 60_000;
+      return now.getTime() >= dueAt;
+    });
 }
 
 export async function listGates(

@@ -1,9 +1,14 @@
-// Worker: runs scheduled checks for every registered project.
+// Worker: runs scheduled checks for the projects that asked for them.
 //
 // Deliberately simple. Unlike a hosted CI, there is nothing to poll and no
 // queue to drain — the worker's job is to run the gates on a cadence so
 // slow-moving regressions (a dependency bump, a clock change, a growing
 // bundle) get caught even when nobody pushed anything.
+//
+// The tick interval is how often the worker *looks*, not how often it runs
+// anything. Each project sets its own cadence in its gatekeeper.json, and a
+// project that set none is never run here: the worker executes the repo's own
+// commands on this machine, so it does that only where the repo asked.
 //
 // A project whose run throws does not stop the others, and does not stop the
 // loop.
@@ -11,7 +16,7 @@
 import { getConfig } from "@/lib/config";
 import { sqlClient } from "@/lib/db";
 import { logger } from "@/lib/log";
-import { listProjects } from "@/modules/projects";
+import { projectsDueForRun } from "@/modules/projects";
 import { reconcileAbandonedRuns, runChecks } from "@/modules/runs";
 
 // How old an unfinished run must be before the worker declares it abandoned.
@@ -27,13 +32,13 @@ let activeWork: Promise<unknown> = Promise.resolve();
 async function tick(): Promise<void> {
   await reconcileAbandonedRuns(ABANDONED_AFTER_MS);
 
-  const projects = await listProjects();
-  if (projects.length === 0) {
-    logger.debug("tick: no projects registered");
+  const due = await projectsDueForRun();
+  if (due.length === 0) {
+    logger.debug("tick: nothing due");
     return;
   }
 
-  for (const project of projects) {
+  for (const project of due) {
     if (shuttingDown) break;
     try {
       const summary = await runChecks({
@@ -44,6 +49,7 @@ async function tick(): Promise<void> {
       logger.info("scheduled run complete", {
         project_id: project.id,
         status: summary.status,
+        schedule_minutes: project.scheduleMinutes,
       });
     } catch (error: unknown) {
       // One unreachable repo must not stop the rest.

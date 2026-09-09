@@ -16,6 +16,13 @@ export function formatAgo(at: Date | null): string {
   return `${days}d ago`;
 }
 
+export function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 /** Percent, or an em dash when there is genuinely no data to report. */
 export function formatRate(rate: number | null): string {
   return rate === null ? "—" : `${Math.round(rate * 100)}%`;

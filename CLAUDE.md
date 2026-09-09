@@ -35,7 +35,10 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
 
 1. **Repetition is the measurement.** The same gate on the same commit can be
    run many times, and every attempt is stored. Deduplicating those would
-   destroy the only evidence a flaky gate leaves.
+   destroy the only evidence a flaky gate leaves. The claim rests on those
+   attempts having had the _same input_, so runs from a dirty working tree are
+   not admissible: a commit SHA does not identify the code when there are
+   uncommitted changes on top of it.
 2. **Distinguish kinds of failure.** `failed` (ran, found a problem),
    `timed_out` (never finished), and `error` (could not run at all) need
    different responses from a human, so they are different statuses. A gate
@@ -50,8 +53,13 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
   they are the product, and a wrong one is worse than none.
 - Keep `runner/` free of storage imports. If that rule ever feels
   inconvenient, that is the rule doing its job.
-- Report honestly: a run with skipped records is `partial`, a dirty working
-  tree is labeled, truncated output says it was truncated.
+- Report honestly: a run with skipped records is `partial`, an interrupted one
+  is `canceled`, a dirty working tree is labeled, truncated output says it was
+  truncated. Neither `partial` nor `canceled` votes in a pass rate — they
+  established nothing, and counting them either way invents news.
+- A run always reaches a terminal status. A row left in `running` is filtered
+  out of every statistic, so a crashed run would erase itself rather than
+  report that it failed to finish.
 - Bound everything that touches the outside world — timeouts on commands,
   caps on captured output, kills that take the whole process group.
 - Small, reversible decisions, written down when non-obvious.
@@ -78,6 +86,11 @@ Makefile or a CI workflow in the same repo. **Only point it at repos you
 trust.** This is inherent to what the tool is, not a bug to be fixed, but it
 should never be made worse — no fetching gate definitions from a network, and
 no running gates from a source the user did not explicitly register.
+
+The same reasoning makes **scheduled runs opt-in per project**
+(`project.scheduleMinutes` in the repo's own config). A worker executing
+someone's test suite on a loop, unasked, is exactly the kind of surprise this
+trust model exists to prevent — so it happens only where the repo asked.
 
 ## Stop and ask before
 

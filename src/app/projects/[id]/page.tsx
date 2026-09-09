@@ -14,6 +14,7 @@ import { listRuns } from "@/modules/runs";
 import {
   formatAgo,
   formatDuration,
+  formatMinutes,
   formatRate,
   statusBadgeClass,
 } from "../../_components/format";
@@ -54,6 +55,13 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       <h2 style={{ marginTop: 0 }}>{project.name}</h2>
       <p className="muted mono">{project.repoPath}</p>
+      {/* Whether the worker runs these commands unprompted is worth stating
+          here, not only in the config file it comes from. */}
+      <p className="muted" style={{ marginTop: "-0.5rem", fontSize: "0.82rem" }}>
+        {project.scheduleMinutes
+          ? `Scheduled every ${formatMinutes(project.scheduleMinutes)} while the worker runs`
+          : "Manual runs only — no scheduled runs configured"}
+      </p>
 
       <div className="grid grid-4" style={{ marginTop: "1rem" }}>
         <div className="card stat">

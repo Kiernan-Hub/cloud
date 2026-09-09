@@ -319,6 +319,17 @@ export async function reconcileAbandonedRuns(olderThanMs: number): Promise<numbe
 // Reads
 // ---------------------------------------------------------------------------
 
+/** The most recent run for a project, whatever its status. */
+export async function latestRun(projectId: string): Promise<CheckRun | null> {
+  const [row] = await db
+    .select()
+    .from(checkRuns)
+    .where(eq(checkRuns.projectId, projectId))
+    .orderBy(desc(checkRuns.startedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function listRuns(projectId: string, limit = 25): Promise<CheckRun[]> {
   return db
     .select()

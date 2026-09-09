@@ -1,0 +1,2 @@
+ALTER TABLE "projects" ADD COLUMN "schedule_minutes" integer;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "sane_schedule" CHECK ("projects"."schedule_minutes" IS NULL OR "projects"."schedule_minutes" >= 5);

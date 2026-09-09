@@ -52,6 +52,52 @@ Then start the dashboard:
 npm run dev     # http://localhost:3000
 ```
 
+To read a run's output without leaving the terminal:
+
+```bash
+gatekeeper show              # the latest run, gates that did not pass
+gatekeeper show 3a148aa9     # a specific run
+gatekeeper show --all        # include the gates that passed
+```
+
+## Scheduled runs
+
+Gatekeeper can re-run a project's gates on a cadence, so slow-moving problems
+— a dependency bump, an expiring certificate, a bundle creeping upward — get
+caught even when nobody pushed anything.
+
+This is **opt-in per project**. Add a cadence to `gatekeeper.json`:
+
+```json
+"project": { "id": "my-app", "name": "My App", "scheduleMinutes": 60 }
+```
+
+then `gatekeeper sync` and run the worker:
+
+```bash
+npm run worker
+```
+
+Without `scheduleMinutes`, the worker never touches the project. Scheduled
+runs execute the repo's own commands on your machine, so they happen only
+where the repo's config asked for them — never as a default.
+
+`WORKER_TICK_SECONDS` is how often the worker _looks_, not how often it runs
+anything; each project keeps its own cadence. `gatekeeper list` shows which
+repos the worker will run unprompted:
+
+```
+  my-app        every 1h       /home/you/code/my-app
+  scratch       manual only    /home/you/code/scratch
+```
+
+A project is due when its last run that **judged the full gate set** is older
+than its interval. A `partial` run does not reset that clock — it left gates
+unchecked, so it is not a substitute for the scheduled sweep — and neither
+does a `canceled` or still-running one. The minimum interval is 5 minutes: a
+gate suite slower than its own cadence would run back-to-back forever, which
+is a busy loop wearing a schedule's clothes.
+
 ## Configuring gates
 
 `gatekeeper.json` in the repo root:
@@ -83,23 +129,24 @@ npm run dev     # http://localhost:3000
 }
 ```
 
-| Field              | Meaning                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `blocking`         | `false` runs and records the gate but does not fail the run. Good for a check you are trialling.                                      |
-| `timeoutSeconds`   | The gate is killed (whole process group) and recorded as `timed_out`, which is distinct from `failed`.                                |
-| `metric.pattern`   | Regex with one capture group, applied to the gate's output. Invalid regexes are rejected when the config loads, not silently ignored. |
-| `metric.direction` | Required with a metric. Without it, a coverage drop and a bundle-size drop look the same.                                             |
+| Field                     | Meaning                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `project.scheduleMinutes` | Opt in to worker-run gates at this cadence. Omit and the worker never touches the project. Minimum 5.                                 |
+| `blocking`                | `false` runs and records the gate but does not fail the run. Good for a check you are trialling.                                      |
+| `timeoutSeconds`          | The gate is killed (whole process group) and recorded as `timed_out`, which is distinct from `failed`.                                |
+| `metric.pattern`          | Regex with one capture group, applied to the gate's output. Invalid regexes are rejected when the config loads, not silently ignored. |
+| `metric.direction`        | Required with a metric. Without it, a coverage drop and a bundle-size drop look the same.                                             |
 
 ## Scripts
 
-| Command                                 | What it does                                |
-| --------------------------------------- | ------------------------------------------- |
-| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `list`          |
-| `npm run dev`                           | Dashboard at localhost:3000                 |
-| `npm run worker`                        | Runs every registered project on a schedule |
-| `npm test`                              | Unit + integration tests (needs Postgres)   |
-| `npm run lint` / `typecheck` / `format` | Checks                                      |
-| `npm run db:migrate`                    | Apply migrations                            |
+| Command                                 | What it does                               |
+| --------------------------------------- | ------------------------------------------ |
+| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `show`, `list` |
+| `npm run dev`                           | Dashboard at localhost:3000                |
+| `npm run worker`                        | Runs projects that set a `scheduleMinutes` |
+| `npm test`                              | Unit + integration tests (needs Postgres)  |
+| `npm run lint` / `typecheck` / `format` | Checks                                     |
+| `npm run db:migrate`                    | Apply migrations                           |
 
 ## How it reports things
 

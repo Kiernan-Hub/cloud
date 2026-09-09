@@ -3,6 +3,7 @@
 //   gatekeeper init  [--repo <path>]   write a starter gatekeeper.json
 //   gatekeeper sync  [--repo <path>]   register the project and its gates
 //   gatekeeper run   [--repo <path>] [--only lint,test]
+//   gatekeeper show  [run-id]          replay a run's captured output
 //   gatekeeper list                    show registered projects
 //
 // `run` exits non-zero when a blocking gate fails, so it works as a git hook
@@ -26,13 +27,14 @@ import {
   upsertGate,
   upsertProject,
 } from "@/modules/projects";
-import { RunCanceled, runChecks } from "@/modules/runs";
+import { getRun, latestRun, RunCanceled, runChecks } from "@/modules/runs";
 
 const { values, positionals } = parseArgs({
   options: {
     repo: { type: "string" },
     only: { type: "string" },
     trigger: { type: "string", default: "manual" },
+    all: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
   allowPositionals: true,
@@ -44,9 +46,11 @@ gatekeeper — run and track your project's quality gates
   gatekeeper init   [--repo <path>]        write a starter ${GATEFILE_NAME}
   gatekeeper sync   [--repo <path>]        register the project and its gates
   gatekeeper run    [--repo <path>] [--only lint,test]
+  gatekeeper show   [run-id] [--all]       replay a run's captured output
   gatekeeper list                          list registered projects
 
 --repo defaults to the current directory.
+show defaults to the latest run, and to the gates that did not pass.
 run exits non-zero if a blocking gate fails.
 `;
 
@@ -67,6 +71,13 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m${Math.round((ms % 60_000) / 1000)}s`;
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${Math.floor(minutes / 60)}h${minutes % 60}m`;
 }
 
 async function cmdInit(): Promise<number> {
@@ -102,6 +113,7 @@ async function cmdSync(): Promise<number> {
     name: config.project.name,
     repoPath,
     defaultBranch: config.project.defaultBranch,
+    scheduleMinutes: config.project.scheduleMinutes ?? null,
   });
 
   for (const [index, gate] of config.gates.entries()) {
@@ -127,6 +139,12 @@ async function cmdSync(): Promise<number> {
   );
 
   out(`Synced '${config.project.id}': ${config.gates.length} gate(s).`);
+  // Say plainly whether the worker will now run these commands unprompted.
+  out(
+    config.project.scheduleMinutes
+      ? `Scheduled runs: every ${formatMinutes(config.project.scheduleMinutes)} (needs \`npm run worker\`).`
+      : "Scheduled runs: off. Add project.scheduleMinutes to enable them.",
+  );
   if (removed.length > 0) {
     // Say what was dropped and that the history survived it.
     out(`Removed gates no longer in config: ${removed.join(", ")}`);
@@ -232,6 +250,88 @@ async function cmdRun(): Promise<number> {
   return summary.status === "passed" || summary.status === "partial" ? 0 : 1;
 }
 
+/**
+ * Replay a stored run in the terminal.
+ *
+ * The output is already captured; needing to start a web server to read it is
+ * friction exactly when someone is mid-debug. Defaults to the latest run and
+ * to the gates that did not pass, since that is what a person is looking for.
+ */
+async function cmdShow(): Promise<number> {
+  const runId = positionals[1];
+
+  let found;
+  if (runId) {
+    found = await getRun(runId);
+    if (!found) {
+      err(`No run found with id '${runId}'.`);
+      return 1;
+    }
+  } else {
+    const config = await loadGatefile(repoPath);
+    const latest = await latestRun(config.project.id);
+    if (!latest) {
+      err(`No runs recorded for '${config.project.id}' yet.`);
+      return 1;
+    }
+    found = await getRun(latest.id);
+    if (!found) return 1;
+  }
+
+  const { run, results } = found;
+
+  out(`Run ${run.id.slice(0, 8)}  ${run.status.toUpperCase()}`);
+  out(
+    `  ${run.commitSha.slice(0, 12)}${run.branch ? ` on ${run.branch}` : " (detached)"}` +
+      `  ${run.durationMs === null ? "—" : formatDuration(run.durationMs)}  ${run.trigger}`,
+  );
+  if (run.commitSubject) out(`  ${run.commitSubject}`);
+
+  // The same caveats the dashboard shows. A terminal reader deserves them
+  // just as much as a browser one.
+  if (run.dirty) {
+    out("  ! Working tree was dirty — not reproducible from the commit alone.");
+  }
+  if (run.status === "partial") {
+    out("  ! Not every gate ran; the skipped ones say nothing either way.");
+  }
+  if (run.status === "canceled") {
+    out("  ! Interrupted before reaching a verdict.");
+  }
+
+  const interesting = values.all
+    ? results
+    : results.filter((result) => result.status !== "passed");
+
+  out("");
+  for (const result of results) {
+    const icon = ICONS[result.status] ?? "?";
+    const duration =
+      result.status === "skipped" ? "not run" : formatDuration(result.durationMs);
+    out(`  ${icon} ${result.gateKey.padEnd(20)} ${duration}`);
+  }
+
+  for (const result of interesting) {
+    const output = [result.stdoutTail, result.stderrTail]
+      .filter((part) => part && part.trim())
+      .join("\n");
+    if (!output) continue;
+
+    out("");
+    out(`── ${result.gateKey} ${"─".repeat(Math.max(0, 60 - result.gateKey.length))}`);
+    // Say so rather than letting a partial log read as the whole story.
+    if (result.truncated) out("(tail only — earlier output was dropped)");
+    out(output);
+  }
+
+  if (interesting.length === 0) {
+    out("");
+    out("Everything passed. Use --all to see their output too.");
+  }
+
+  return 0;
+}
+
 async function cmdList(): Promise<number> {
   const all = await listProjects();
   if (all.length === 0) {
@@ -239,7 +339,12 @@ async function cmdList(): Promise<number> {
     return 0;
   }
   for (const project of all) {
-    out(`  ${project.id.padEnd(24)} ${project.repoPath}`);
+    // Which repos the worker will run unprompted is worth being able to see
+    // at a glance, not something to go read a config file for.
+    const schedule = project.scheduleMinutes
+      ? `every ${formatMinutes(project.scheduleMinutes)}`
+      : "manual only";
+    out(`  ${project.id.padEnd(24)} ${schedule.padEnd(14)} ${project.repoPath}`);
   }
   return 0;
 }
@@ -259,6 +364,8 @@ async function main(): Promise<number> {
       return cmdSync();
     case "run":
       return cmdRun();
+    case "show":
+      return cmdShow();
     case "list":
       return cmdList();
     default:

@@ -32,14 +32,30 @@ import {
 // Projects
 // ---------------------------------------------------------------------------
 
-export const projects = pgTable("projects", {
-  id: text("id").primaryKey(), // slug
-  name: text("name").notNull(),
-  repoPath: text("repo_path").notNull(), // absolute path on this machine
-  defaultBranch: text("default_branch").notNull().default("main"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const projects = pgTable(
+  "projects",
+  {
+    id: text("id").primaryKey(), // slug
+    name: text("name").notNull(),
+    repoPath: text("repo_path").notNull(), // absolute path on this machine
+    defaultBranch: text("default_branch").notNull().default("main"),
+
+    // How often the worker should run this project's gates, in minutes.
+    // NULL means never: scheduled runs are opt-in, because the worker
+    // executes the repo's own commands on the user's machine and doing that
+    // unasked, on a loop, is not a surprise anyone should have to discover.
+    scheduleMinutes: integer("schedule_minutes"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      "sane_schedule",
+      sql`${table.scheduleMinutes} IS NULL OR ${table.scheduleMinutes} >= 5`,
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Gates
