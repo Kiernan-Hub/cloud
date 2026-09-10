@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 
 import {
   findRegressions,
+  flakeEvidence,
   gateFlakiness,
   gateReliability,
+  metricDrift,
   metricHistory,
   projectSummary,
 } from "@/modules/analysis";
@@ -14,7 +16,9 @@ import { listRuns } from "@/modules/runs";
 import {
   formatAgo,
   formatDuration,
+  formatMinutes,
   formatRate,
+  repoPathExists,
   statusBadgeClass,
 } from "../../_components/format";
 import { Sparkline } from "../../_components/sparkline";
@@ -27,14 +31,19 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [summary, runs, reliability, flakiness, regressions, gates] = await Promise.all([
-    projectSummary(id),
-    listRuns(id, 20),
-    gateReliability(id),
-    gateFlakiness(id),
-    findRegressions(id),
-    listGates(id),
-  ]);
+  const [summary, runs, reliability, flakiness, flakes, regressions, drifts, gates] =
+    await Promise.all([
+      projectSummary(id),
+      listRuns(id, 20),
+      gateReliability(id),
+      gateFlakiness(id),
+      flakeEvidence(id, 10),
+      findRegressions(id),
+      metricDrift(id),
+      listGates(id),
+    ]);
+
+  const repoMissing = !(await repoPathExists(project.repoPath));
 
   const metricGates = gates.filter((gate) => gate.metricName && gate.metricDirection);
   const histories = await Promise.all(
@@ -54,15 +63,42 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       <h2 style={{ marginTop: 0 }}>{project.name}</h2>
       <p className="muted mono">{project.repoPath}</p>
+      {/* Whether the worker runs these commands unprompted is worth stating
+          here, not only in the config file it comes from. */}
+      <p className="muted" style={{ marginTop: "-0.5rem", fontSize: "0.82rem" }}>
+        {project.scheduleMinutes
+          ? `Scheduled every ${formatMinutes(project.scheduleMinutes)} while the worker runs`
+          : "Manual runs only — no scheduled runs configured"}
+      </p>
+
+      {repoMissing ? (
+        <p className="notice notice-warn" role="status">
+          <strong>Nothing is at this path.</strong> The repository has been moved or
+          deleted, so no further runs are possible — the numbers below are history, not
+          the current state. Point the repo back, or run{" "}
+          <code>gatekeeper forget {project.id} --force</code> to drop it.
+        </p>
+      ) : null}
 
       <div className="grid grid-4" style={{ marginTop: "1rem" }}>
         <div className="card stat">
           <div className="stat-value">{formatRate(summary.passRate)}</div>
-          <div className="stat-label">Pass rate</div>
+          {/* Say what the rate is *of*. Partial and canceled runs judged
+              nothing, so they are named here rather than silently folded in. */}
+          <div className="stat-label">
+            Pass rate
+            {summary.partial + summary.canceled > 0
+              ? ` (of ${summary.totalRuns - summary.partial - summary.canceled} judged)`
+              : ""}
+          </div>
         </div>
         <div className="card stat">
           <div className="stat-value">{summary.totalRuns}</div>
-          <div className="stat-label">Total runs</div>
+          <div className="stat-label">
+            Total runs
+            {summary.partial > 0 ? ` · ${summary.partial} partial` : ""}
+            {summary.canceled > 0 ? ` · ${summary.canceled} canceled` : ""}
+          </div>
         </div>
         <div className="card stat">
           <div className="stat-value">{formatDuration(summary.medianRunMs)}</div>
@@ -94,6 +130,78 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      ) : null}
+
+      {drifts.length > 0 ? (
+        <>
+          <h2>Drifting metrics</h2>
+          <div className="notice notice-warn">
+            {/* A slide is a different finding from a step change: no single
+                run is to blame, which is exactly why it goes unnoticed. */}
+            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+              {drifts.map((drift) => (
+                <li key={drift.gateKey}>
+                  <strong>{drift.metricName}</strong> has moved {drift.earlierMedian} →{" "}
+                  {drift.recentMedian}
+                  {drift.percentChange !== null
+                    ? ` (${(drift.percentChange * 100).toFixed(1)}%)`
+                    : ""}{" "}
+                  comparing the median of the last {drift.halfSize} runs against the{" "}
+                  {drift.halfSize} before them
+                  {drift.direction === "higher_is_better"
+                    ? " — higher is better"
+                    : " — lower is better"}
+                  .
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+
+      {flakes.length > 0 ? (
+        <>
+          <h2>Flaky gates</h2>
+          {/* A flake rate on its own is an accusation without evidence. The
+              next question is always "which commit, and can I see it both
+              ways?" — so link a passing and a failing run of the same code. */}
+          <p className="muted" style={{ marginTop: "-0.5rem", fontSize: "0.85rem" }}>
+            These gates gave different answers for the same commit. Compare the two runs —
+            the cause is usually visible in the difference.
+          </p>
+          <div className="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Gate</th>
+                  <th>Commit</th>
+                  <th className="num">Attempts</th>
+                  <th>Compare</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flakes.map((flake) => (
+                  <tr key={`${flake.gateKey}-${flake.commitSha}`}>
+                    <td className="mono">{flake.gateKey}</td>
+                    <td className="mono" title={flake.commitSubject ?? undefined}>
+                      {flake.commitSha.slice(0, 8)}
+                    </td>
+                    <td className="num">
+                      {flake.passes}/{flake.attempts} passed
+                    </td>
+                    <td>
+                      <Link href={`/runs/${flake.passingRunId}`}>passing</Link>
+                      {" · "}
+                      <Link href={`/runs/${flake.failingRunId}`}>
+                        {flake.failingStatus === "timed_out" ? "timed out" : "failing"}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       ) : null}
@@ -132,7 +240,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                       {/* null means never retried — no evidence, which is
                           not the same as evidence of reliability. */}
                       {flake?.flakeRate === null || flake === undefined ? (
-                        <span className="muted" title="Never run twice on one commit">
+                        <span
+                          className="muted"
+                          title="Never run twice on one clean commit — dirty runs cannot be compared"
+                        >
                           —
                         </span>
                       ) : flake.flakeRate > 0 ? (

@@ -32,14 +32,30 @@ import {
 // Projects
 // ---------------------------------------------------------------------------
 
-export const projects = pgTable("projects", {
-  id: text("id").primaryKey(), // slug
-  name: text("name").notNull(),
-  repoPath: text("repo_path").notNull(), // absolute path on this machine
-  defaultBranch: text("default_branch").notNull().default("main"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const projects = pgTable(
+  "projects",
+  {
+    id: text("id").primaryKey(), // slug
+    name: text("name").notNull(),
+    repoPath: text("repo_path").notNull(), // absolute path on this machine
+    defaultBranch: text("default_branch").notNull().default("main"),
+
+    // How often the worker should run this project's gates, in minutes.
+    // NULL means never: scheduled runs are opt-in, because the worker
+    // executes the repo's own commands on the user's machine and doing that
+    // unasked, on a loop, is not a surprise anyone should have to discover.
+    scheduleMinutes: integer("schedule_minutes"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      "sane_schedule",
+      sql`${table.scheduleMinutes} IS NULL OR ${table.scheduleMinutes} >= 5`,
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Gates
@@ -99,11 +115,18 @@ export const gates = pgTable(
 // Check runs
 // ---------------------------------------------------------------------------
 
+// A run's verdict. Three of these exist because they call for different
+// responses: `passed` means the full gate set ran clean, `partial` means it
+// ran clean but not all of it ran, and `canceled` means it never reached a
+// verdict at all. Collapsing the last two into `passed` or `failed` would
+// invent news in one direction or the other.
 export const runStatusEnum = pgEnum("run_status", [
   "running",
   "passed",
+  "partial",
   "failed",
   "error",
+  "canceled",
 ]);
 
 export const triggerEnum = pgEnum("run_trigger", ["manual", "scheduled", "watch"]);
@@ -139,6 +162,11 @@ export const checkRuns = pgTable(
       "finished_runs_have_end",
       sql`${table.status} = 'running' OR ${table.finishedAt} IS NOT NULL`,
     ),
+    // Finding runs abandoned by a killed process, so they can be reconciled
+    // instead of sitting in 'running' forever.
+    index("runs_unfinished_idx")
+      .on(table.startedAt)
+      .where(sql`status = 'running'`),
   ],
 );
 
@@ -181,6 +209,14 @@ export const gateResults = pgTable(
     stderrTail: text("stderr_tail"),
     truncated: boolean("truncated").notNull().default(false),
 
+    // Output is dropped after a retention window; the row itself is kept
+    // forever, because the status is the flake evidence and deleting it would
+    // destroy the measurement. This flag is what keeps that honest: without
+    // it, a pruned result is indistinguishable from a gate that printed
+    // nothing, and the UI would claim there was no output rather than
+    // admitting we discarded it.
+    outputPruned: boolean("output_pruned").notNull().default(false),
+
     metricValue: numeric("metric_value"),
 
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -192,6 +228,11 @@ export const gateResults = pgTable(
     uniqueIndex("one_result_per_gate_per_run").on(table.runId, table.gateId),
     index("results_gate_history_idx").on(table.gateId, table.startedAt),
     index("results_flake_idx").on(table.projectId, table.gateKey, table.commitSha),
+    // Retention sweeps run often and usually find nothing, so they should not
+    // have to scan rows already pruned.
+    index("results_prunable_idx")
+      .on(table.startedAt)
+      .where(sql`NOT output_pruned`),
     check("non_negative_duration", sql`${table.durationMs} >= 0`),
   ],
 );
