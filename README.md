@@ -19,6 +19,9 @@ have actually been doing.
   (coverage, bundle size, test count) and tells you both when it drops in one
   step and when it is quietly sliding the wrong way over many runs.
 - Shows pass rates, p95 durations, and captured output for every run.
+- **Surfaces findings across every registered project** on the dashboard home
+  page, so a flaky gate or a drifting metric does not wait to be discovered by
+  someone opening each project in turn.
 - Exits non-zero on failure, so `gatekeeper run` works as a pre-push hook.
 
 ## Requirements
