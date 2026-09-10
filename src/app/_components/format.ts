@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+
 export function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
   if (ms < 1000) return `${ms}ms`;
@@ -38,4 +40,20 @@ export function statusBadgeClass(status: string): string {
   // neutral — they are the absence of a result, not a bad one.
   if (status === "partial") return "badge badge-warn";
   return "badge";
+}
+
+/**
+ * Whether a project's repo is still where it says it is.
+ *
+ * Read at render time rather than stored, because it is a fact about the
+ * machine right now, not about any run. A scheduled project whose directory
+ * has gone is silently never checked again — this is what stops that being
+ * invisible.
+ */
+export async function repoPathExists(repoPath: string): Promise<boolean> {
+  try {
+    return (await stat(repoPath)).isDirectory();
+  } catch {
+    return false;
+  }
 }

@@ -8,7 +8,12 @@ import {
 } from "@/modules/analysis";
 import { listProjects } from "@/modules/projects";
 
-import { formatAgo, formatRate, statusBadgeClass } from "./_components/format";
+import {
+  formatAgo,
+  formatRate,
+  repoPathExists,
+  statusBadgeClass,
+} from "./_components/format";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +52,10 @@ npm run gk -- run      # runs the gates`}
     projects.map(async (project) => ({
       project,
       summary: await projectSummary(project.id),
+      // A scheduled project whose directory has gone is never checked again.
+      // The worker says so once and then stays quiet, so this is where the
+      // standing signal lives.
+      repoMissing: !(await repoPathExists(project.repoPath)),
     })),
   );
 
@@ -55,7 +64,7 @@ npm run gk -- run      # runs the gates`}
   // with a handful of projects is a fair price for not having to hunt.
   const findings = (
     await Promise.all(
-      projects.map(async (project) => {
+      summaries.map(async ({ project, repoMissing }) => {
         const [flakiness, drifts, regressions] = await Promise.all([
           gateFlakiness(project.id),
           metricDrift(project.id),
@@ -63,6 +72,16 @@ npm run gk -- run      # runs the gates`}
         ]);
 
         return [
+          ...(repoMissing
+            ? [
+                {
+                  project,
+                  key: `missing-${project.id}`,
+                  what: "repository is missing",
+                  detail: `nothing is at ${project.repoPath} — runs cannot happen until it returns, or run \`gk forget ${project.id}\``,
+                },
+              ]
+            : []),
           ...flakiness
             .filter((gate) => gate.flakeRate !== null && gate.flakeRate > 0)
             .map((gate) => ({
@@ -133,7 +152,7 @@ npm run gk -- run      # runs the gates`}
         </p>
       ) : null}
       <div className="grid">
-        {summaries.map(({ project, summary }) => (
+        {summaries.map(({ project, summary, repoMissing }) => (
           <div key={project.id} className="card">
             <div
               style={{
@@ -146,7 +165,9 @@ npm run gk -- run      # runs the gates`}
               <h3 style={{ margin: 0, fontSize: "1rem" }}>
                 <Link href={`/projects/${project.id}`}>{project.name}</Link>
               </h3>
-              {summary.lastStatus ? (
+              {repoMissing ? (
+                <span className="badge badge-fail">repo missing</span>
+              ) : summary.lastStatus ? (
                 <span className={statusBadgeClass(summary.lastStatus)}>
                   {summary.lastStatus}
                 </span>

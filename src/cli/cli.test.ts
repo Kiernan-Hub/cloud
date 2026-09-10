@@ -10,7 +10,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { closeDb, db } from "@/lib/db";
+import { getProject, upsertProject } from "@/modules/projects";
 
 const run = promisify(execFile);
 const CLI = join(process.cwd(), "src", "cli", "gatekeeper.ts");
@@ -24,6 +28,20 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(repoPath, { recursive: true, force: true });
 });
+
+/** Run the CLI with the test runner's environment, database included. */
+async function withDatabase(args: string[]) {
+  try {
+    const { stdout } = await run("npx", ["tsx", CLI, ...args], { env: process.env });
+    return { code: 0, stdout };
+  } catch (error) {
+    const failure = error as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: failure.code ?? 1,
+      stdout: `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+    };
+  }
+}
 
 /** Run the CLI with DATABASE_URL removed, whatever the test runner has set. */
 async function withoutDatabase(args: string[]) {
@@ -76,4 +94,53 @@ describe("commands that need the database", () => {
     expect(result.code).not.toBe(0);
     expect(result.stdout).toContain("DATABASE_URL");
   });
+});
+
+describe("gatekeeper forget", () => {
+  const PROJECT = "test-cli-forget";
+
+  afterEach(async () => {
+    await db.execute(sql`DELETE FROM projects WHERE id = ${PROJECT}`);
+  });
+
+  it("reports what would be lost and deletes nothing without --force", async () => {
+    await upsertProject({ id: PROJECT, name: "Forget me", repoPath: "/tmp/forget-me" });
+
+    const result = await withDatabase(["forget", PROJECT]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("recorded run(s)");
+    expect(result.stdout).toContain("--force");
+    // Asking what would happen must not make it happen.
+    expect(await getProject(PROJECT)).not.toBeNull();
+  });
+
+  it("deletes it with --force", async () => {
+    await upsertProject({ id: PROJECT, name: "Forget me", repoPath: "/tmp/forget-me" });
+
+    const result = await withDatabase(["forget", PROJECT, "--force"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`Forgot '${PROJECT}'`);
+    expect(await getProject(PROJECT)).toBeNull();
+  });
+
+  it("says so for a project that is not registered", async () => {
+    const result = await withDatabase(["forget", "never-registered", "--force"]);
+
+    // Reporting a successful deletion of nothing would be worse than useless.
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("No project registered");
+  });
+
+  it("asks for an id rather than guessing", async () => {
+    const result = await withDatabase(["forget"]);
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("Usage:");
+  });
+});
+
+afterAll(async () => {
+  await closeDb();
 });

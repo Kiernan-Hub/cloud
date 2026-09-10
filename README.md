@@ -165,9 +165,12 @@ than to print something shaped like a finding.
 ## Removing a project
 
 `gatekeeper sync` registers a project; nothing else ever unregisters one. If
-you delete or move a repo, it stays registered — and if it had a schedule, the
-worker reports the repository as missing once and then leaves it alone rather
-than retrying it every tick forever.
+you delete or move a repo, it stays registered.
+
+The dashboard says so — a project whose directory is gone is flagged on the
+home page and on its own page, because a scheduled project that can never run
+again must not sit in a list of green cards looking fine. The worker skips it
+without spawning git, and logs it once rather than on every tick.
 
 ```bash
 gatekeeper forget my-app            # says what would be lost, deletes nothing

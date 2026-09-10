@@ -13,6 +13,8 @@
 // A project whose run throws does not stop the others, and does not stop the
 // loop.
 
+import { stat } from "node:fs/promises";
+
 import { getConfig } from "@/lib/config";
 import { closeDb } from "@/lib/db";
 import { logger } from "@/lib/log";
@@ -30,15 +32,27 @@ const ABANDONED_AFTER_MS = 12 * 60 * 60 * 1000;
 let shuttingDown = false;
 let activeWork: Promise<unknown> = Promise.resolve();
 
-// Projects whose repo we could not find, so the same "it is still gone" is
+// Projects whose repo we could not reach, so the same "it is still gone" is
 // not reported on every tick.
 //
 // A vanished repo never records a run, so the project stays due forever and
-// is retried every tick — at the default cadence that is a identical error
+// is retried every tick — at the default cadence that is an identical error
 // line every minute, indefinitely, for a directory that is not coming back.
-// The condition still matters, so it is reported once when it starts and once
-// when it ends, rather than either spammed or swallowed.
+//
+// Suppressing the log must not make the condition invisible, which would be
+// the same failure this tool exists to prevent. The dashboard reads the path
+// directly and says when a project's repo is not where it claims to be, so
+// the standing signal lives there; this set only stops the *log* repeating.
 const unreachable = new Set<string>();
+
+/** Whether the repo directory is still where the project says it is. */
+async function repoPathExists(repoPath: string): Promise<boolean> {
+  try {
+    return (await stat(repoPath)).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 async function tick(): Promise<void> {
   await reconcileAbandonedRuns(ABANDONED_AFTER_MS);
@@ -54,6 +68,22 @@ async function tick(): Promise<void> {
 
   for (const project of due) {
     if (shuttingDown) break;
+
+    // Checked before running rather than inferred from a git failure. It
+    // makes the skip actually cheap — no subprocess per tick for a directory
+    // that is not there — and it keeps "the repo is gone" distinct from "git
+    // failed", which are different problems with the same exception.
+    if (!(await repoPathExists(project.repoPath))) {
+      if (!unreachable.has(project.id)) {
+        unreachable.add(project.id);
+        logger.warn("repository directory is gone — skipping until it returns", {
+          project_id: project.id,
+          repo_path: project.repoPath,
+        });
+      }
+      continue;
+    }
+
     try {
       const summary = await runChecks({
         projectId: project.id,
@@ -61,7 +91,7 @@ async function tick(): Promise<void> {
         trigger: "scheduled",
       });
       if (unreachable.delete(project.id)) {
-        logger.info("repository is back", {
+        logger.info("repository directory is back", {
           project_id: project.id,
           repo_path: project.repoPath,
         });
@@ -75,15 +105,15 @@ async function tick(): Promise<void> {
     } catch (error: unknown) {
       // One unreachable repo must not stop the rest.
       if (error instanceof NotAGitRepoError) {
-        // Deleted or moved, most likely. Say so once and stay quiet until
-        // something changes — either it comes back, or `gk forget` drops it.
-        if (!unreachable.has(project.id)) {
-          unreachable.add(project.id);
-          logger.warn("repository not found — skipping until it returns", {
-            project_id: project.id,
-            repo_path: project.repoPath,
-          });
-        }
+        // The directory is there but git could not read it: `.git` removed,
+        // a permissions problem, or no git binary. Not the same as the repo
+        // being gone, so it says so — and it is not suppressed, because
+        // unlike a deleted directory these are usually fixable and worth
+        // seeing again.
+        logger.error("directory is not a readable git repository", {
+          project_id: project.id,
+          repo_path: project.repoPath,
+        });
         continue;
       }
 

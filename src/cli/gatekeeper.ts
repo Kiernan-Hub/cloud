@@ -495,16 +495,16 @@ async function cmdForget(): Promise<number> {
     return 2;
   }
 
-  const project = await getProject(projectId);
-  if (!project) {
-    err(`No project registered with id '${projectId}'.`);
-    return 1;
-  }
-
-  const runs = await countRuns(projectId);
-
   if (!values.force) {
-    out(`'${projectId}' has ${runs} recorded run(s) at ${project.repoPath}.`);
+    const project = await getProject(projectId);
+    if (!project) {
+      err(`No project registered with id '${projectId}'.`);
+      return 1;
+    }
+
+    out(
+      `'${projectId}' has ${await countRuns(projectId)} recorded run(s) at ${project.repoPath}.`,
+    );
     out("Forgetting it deletes the project, its gates, and every result —");
     out("including the repeated runs that are the flake evidence.");
     out("");
@@ -513,6 +513,9 @@ async function cmdForget(): Promise<number> {
     return 0;
   }
 
+  // Straight to the delete, which reports the count it actually removed.
+  // Counting separately first would mean reporting one number and deleting
+  // another if a run landed in between.
   const removed = await forgetProject(projectId);
   if (!removed) {
     err(`No project registered with id '${projectId}'.`);

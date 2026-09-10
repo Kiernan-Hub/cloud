@@ -18,6 +18,7 @@ import {
   formatDuration,
   formatMinutes,
   formatRate,
+  repoPathExists,
   statusBadgeClass,
 } from "../../_components/format";
 import { Sparkline } from "../../_components/sparkline";
@@ -41,6 +42,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       metricDrift(id),
       listGates(id),
     ]);
+
+  const repoMissing = !(await repoPathExists(project.repoPath));
 
   const metricGates = gates.filter((gate) => gate.metricName && gate.metricDirection);
   const histories = await Promise.all(
@@ -67,6 +70,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           ? `Scheduled every ${formatMinutes(project.scheduleMinutes)} while the worker runs`
           : "Manual runs only — no scheduled runs configured"}
       </p>
+
+      {repoMissing ? (
+        <p className="notice notice-warn" role="status">
+          <strong>Nothing is at this path.</strong> The repository has been moved or
+          deleted, so no further runs are possible — the numbers below are history, not
+          the current state. Point the repo back, or run{" "}
+          <code>gatekeeper forget {project.id} --force</code> to drop it.
+        </p>
+      ) : null}
 
       <div className="grid grid-4" style={{ marginTop: "1rem" }}>
         <div className="card stat">

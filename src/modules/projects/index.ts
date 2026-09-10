@@ -175,18 +175,23 @@ export async function upsertGate(projectId: string, input: GateInput): Promise<G
  * than reporting a successful deletion of nothing.
  */
 export async function forgetProject(projectId: string): Promise<{ runs: number } | null> {
-  const project = await getProject(projectId);
-  if (!project) return null;
-
-  const [counted] = await db.execute<{ runs: number }>(
-    sql`SELECT COUNT(*)::int AS runs FROM check_runs WHERE project_id = ${projectId}`,
-  );
-
+  // Counted and deleted in one statement, so the number reported is provably
+  // the number removed. Counting first and deleting after would let a run
+  // land in between and report one number while destroying another.
+  //
   // gates and check_runs cascade from projects; gate_results cascades from
   // check_runs.
-  await db.delete(projects).where(eq(projects.id, projectId));
+  const [row] = await db.execute<{ runs: number; deleted: string | null }>(sql`
+    WITH counted AS (
+      SELECT COUNT(*)::int AS runs FROM check_runs WHERE project_id = ${projectId}
+    ), deleted AS (
+      DELETE FROM projects WHERE id = ${projectId} RETURNING id
+    )
+    SELECT (SELECT runs FROM counted) AS runs, (SELECT id FROM deleted) AS deleted
+  `);
 
-  return { runs: counted?.runs ?? 0 };
+  if (!row || row.deleted === null) return null;
+  return { runs: row.runs };
 }
 
 /** How many runs a project has, for warning before `forgetProject`. */
