@@ -8,6 +8,7 @@ import {
   flakeEvidence,
   gateFlakiness,
   gateReliability,
+  metricDrift,
   metricHistory,
   projectSummary,
   tallyAttempts,
@@ -495,6 +496,145 @@ describe("findRegressions", () => {
     const [regression] = await findRegressions(PROJECT);
     expect(regression!.delta).toBe(5);
     expect(regression!.percentChange).toBeNull();
+  });
+});
+
+describe("metricDrift", () => {
+  /** Record `values` in order as a metric history for one gate. */
+  async function history(gateId: string, key: string, values: number[]) {
+    for (const [index, value] of values.entries()) {
+      await record(gateId, key, `c${index}`, "passed", { metricValue: value });
+    }
+  }
+
+  it("sees a downward trend that the step comparison reports as an improvement", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    // Jittery, but clearly sliding: ~90 down to ~84. The last hop happens to
+    // tick upward, which is all findRegressions looks at.
+    await history(gateId, "cov", [91, 89, 92, 88, 90, 87, 86, 88, 84, 86, 83, 85]);
+
+    // Two points cannot tell noise from a trend: the final 83 → 85 reads as
+    // an improvement, so nothing is reported.
+    expect(await findRegressions(PROJECT)).toEqual([]);
+
+    // Comparing halves sees the slide the last hop hid.
+    const [drift] = await metricDrift(PROJECT, { window: 12 });
+    expect(drift!.metricName).toBe("coverage");
+    expect(drift!.earlierMedian).toBeGreaterThan(drift!.recentMedian);
+    expect(drift!.delta).toBeLessThan(0);
+  });
+
+  it("reports the size of the slide, not the size of the last hop", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    // Monotonic, half a point per run. findRegressions does fire here, but
+    // only ever describes the final 0.5 — which reads as trivial when the
+    // metric is really five and a half points down.
+    await history(
+      gateId,
+      "cov",
+      Array.from({ length: 12 }, (_, index) => 90 - index * 0.5),
+    );
+
+    expect((await findRegressions(PROJECT))[0]!.delta).toBeCloseTo(-0.5);
+
+    const [drift] = await metricDrift(PROJECT, { window: 12 });
+    expect(drift!.delta).toBeCloseTo(-3);
+  });
+
+  it("respects direction — a falling bundle size is good news", async () => {
+    const gateId = await makeGate("size", {
+      name: "bundle",
+      direction: "lower_is_better",
+    });
+    await history(
+      gateId,
+      "size",
+      Array.from({ length: 12 }, (_, index) => 500 - index * 5),
+    );
+
+    // A coverage drop and a bundle-size drop are opposite news.
+    expect(await metricDrift(PROJECT, { window: 12 })).toEqual([]);
+  });
+
+  it("reports a rising bundle size as drift", async () => {
+    const gateId = await makeGate("size", {
+      name: "bundle",
+      direction: "lower_is_better",
+    });
+    await history(
+      gateId,
+      "size",
+      Array.from({ length: 12 }, (_, index) => 500 + index * 5),
+    );
+
+    const [drift] = await metricDrift(PROJECT, { window: 12 });
+    expect(drift!.delta).toBeGreaterThan(0);
+  });
+
+  it("says nothing when the halves are too thin to tell a trend from noise", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    await history(gateId, "cov", [90, 80, 70]);
+
+    // A trend claimed from three points is a guess. Reporting nothing is the
+    // honest answer, not a finding shaped like one.
+    expect(await metricDrift(PROJECT, { window: 12 })).toEqual([]);
+  });
+
+  it("uses the history that exists rather than demanding a full window", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    // Ten points against a window of 20: a young project should still get an
+    // answer, so long as each half is thick enough to mean something.
+    await history(gateId, "cov", [90, 91, 89, 90, 91, 84, 83, 85, 84, 83]);
+
+    const [drift] = await metricDrift(PROJECT, { window: 20 });
+    expect(drift!.halfSize).toBe(5);
+    expect(drift!.delta).toBeLessThan(0);
+  });
+
+  it("is not fooled by a single outlier", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    // Steady at 90, with one bad reading in the recent half. A mean would
+    // show a drop; the median holds.
+    await history(gateId, "cov", [90, 90, 90, 90, 90, 90, 90, 90, 90, 0, 90, 90]);
+
+    expect(await metricDrift(PROJECT, { window: 12 })).toEqual([]);
+  });
+
+  it("ignores a metric with no direction, which cannot be judged", async () => {
+    const gateId = await makeGate("plain");
+    await history(
+      gateId,
+      "plain",
+      Array.from({ length: 12 }, (_, index) => 90 - index),
+    );
+
+    // Without a direction there is no way to know which way is worse.
+    expect(await metricDrift(PROJECT, { window: 12 })).toEqual([]);
+  });
+
+  it("says nothing about a metric holding steady", async () => {
+    const gateId = await makeGate("cov", {
+      name: "coverage",
+      direction: "higher_is_better",
+    });
+    await history(gateId, "cov", Array(12).fill(85));
+
+    expect(await metricDrift(PROJECT, { window: 12 })).toEqual([]);
   });
 });
 

@@ -15,8 +15,9 @@ have actually been doing.
 - **Detects flaky gates**: the same gate on the same commit producing both a
   pass and a fail. Same input, different answer — that is a gate problem, not
   a code problem. `--repeat` hunts one on demand.
-- **Detects regressions**: extracts a number from a gate's output (coverage,
-  bundle size, test count) and tells you when it moves the wrong way.
+- **Detects regressions and drift**: extracts a number from a gate's output
+  (coverage, bundle size, test count) and tells you both when it drops in one
+  step and when it is quietly sliding the wrong way over many runs.
 - Shows pass rates, p95 durations, and captured output for every run.
 - Exits non-zero on failure, so `gatekeeper run` works as a pre-push hook.
 
@@ -133,6 +134,29 @@ unchecked, so it is not a substitute for the scheduled sweep — and neither
 does a `canceled` or still-running one. The minimum interval is 5 minutes: a
 gate suite slower than its own cadence would run back-to-back forever, which
 is a busy loop wearing a schedule's clothes.
+
+## Regressions vs drift
+
+These are two different findings and the dashboard reports them separately.
+
+A **regression** is a step: the latest value is worse than the one before it,
+or it has crossed a `threshold` you set. One commit is to blame, and you can
+usually name it.
+
+**Drift** is a slope: nothing broke in any single run, but the metric has been
+sliding. Gatekeeper compares the median of the most recent runs against the
+median of the same number before them.
+
+Comparing two adjacent values cannot tell noise from a trend. A coverage
+number that jitters a point either way while sliding downward reports no
+regression whenever the last hop happens to tick up — and when it does fire,
+it reports the size of that one hop rather than the size of the slide.
+Medians of two halves see through that, and one bad reading can neither
+manufacture a trend nor hide one.
+
+Drift is only reported when both halves of the window are full. A trend
+claimed from three data points is a guess, and the honest answer is to say
+nothing rather than to print something shaped like a finding.
 
 ## Retention
 

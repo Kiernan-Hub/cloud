@@ -27,8 +27,8 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
   we recorded", and lets it be tested against real subprocesses with no
   database.
 - **`runs/`** orchestrates a run and stores results.
-- **`analysis/`** turns stored results into flakiness, reliability, and
-  regressions.
+- **`analysis/`** turns stored results into flakiness, reliability,
+  regressions and drift.
 - **`projects/`** is the registry of repos and their gates.
 
 ## The three ideas the design rests on
@@ -74,6 +74,8 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
 - Deduplicating gate results by commit, or "cleaning up" repeated runs.
 - Reporting a metric without a direction — a coverage drop and a bundle-size
   drop are opposite news.
+- Claiming a trend from two adjacent points. Noise and a slope are not
+  distinguishable that way; compare medians of a full window, or say nothing.
 - Treating a gate that failed to execute as a pass.
 - Storing whole command output unbounded.
 - Inventing data to make a chart look better, or showing `0%` where the honest

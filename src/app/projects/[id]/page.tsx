@@ -6,6 +6,7 @@ import {
   flakeEvidence,
   gateFlakiness,
   gateReliability,
+  metricDrift,
   metricHistory,
   projectSummary,
 } from "@/modules/analysis";
@@ -29,7 +30,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [summary, runs, reliability, flakiness, flakes, regressions, gates] =
+  const [summary, runs, reliability, flakiness, flakes, regressions, drifts, gates] =
     await Promise.all([
       projectSummary(id),
       listRuns(id, 20),
@@ -37,6 +38,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       gateFlakiness(id),
       flakeEvidence(id, 10),
       findRegressions(id),
+      metricDrift(id),
       listGates(id),
     ]);
 
@@ -113,6 +115,33 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                   {regression.breachedThreshold
                     ? ` — below the ${regression.threshold} threshold`
                     : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+
+      {drifts.length > 0 ? (
+        <>
+          <h2>Drifting metrics</h2>
+          <div className="notice notice-warn">
+            {/* A slide is a different finding from a step change: no single
+                run is to blame, which is exactly why it goes unnoticed. */}
+            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+              {drifts.map((drift) => (
+                <li key={drift.gateKey}>
+                  <strong>{drift.metricName}</strong> has moved {drift.earlierMedian} →{" "}
+                  {drift.recentMedian}
+                  {drift.percentChange !== null
+                    ? ` (${(drift.percentChange * 100).toFixed(1)}%)`
+                    : ""}{" "}
+                  comparing the median of the last {drift.halfSize} runs against the{" "}
+                  {drift.halfSize} before them
+                  {drift.direction === "higher_is_better"
+                    ? " — higher is better"
+                    : " — lower is better"}
+                  .
                 </li>
               ))}
             </ul>

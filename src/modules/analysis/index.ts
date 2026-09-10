@@ -4,7 +4,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { checkRuns, gateResults } from "@/lib/db/schema";
+import { checkRuns, gateResults, gates } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
 // Flakiness
@@ -412,6 +412,107 @@ export async function findRegressions(projectId: string): Promise<Regression[]> 
   }
 
   return regressions;
+}
+
+export type MetricDrift = {
+  gateKey: string;
+  metricName: string;
+  direction: "higher_is_better" | "lower_is_better";
+  /** Median of the older half of the window. */
+  earlierMedian: number;
+  /** Median of the newer half. */
+  recentMedian: number;
+  delta: number;
+  percentChange: number | null;
+  /** Points in each half. Both halves are this size, or there is no finding. */
+  halfSize: number;
+  worsening: boolean;
+};
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1]! + sorted[middle]!) / 2
+    : sorted[middle]!;
+}
+
+/**
+ * Metrics sliding the wrong way over time, as opposed to in one step.
+ *
+ * `findRegressions` compares the two most recent values, which answers a
+ * different question and answers it badly for a noisy metric. A coverage
+ * number that jitters a point either way while trending down reports nothing
+ * whenever the last hop happens to tick up, and when it does fire it reports
+ * the size of that one hop rather than the size of the slide. Both are the
+ * same mistake: two points cannot distinguish noise from a trend.
+ *
+ * So this compares the median of the recent half of a window against the
+ * median of the earlier half. Medians rather than means, because one flaky
+ * reading should not be able to manufacture a trend — or hide one.
+ *
+ * `window` is the most history to consider, not a requirement: whatever is
+ * available up to that is used. But each half must hold at least `minHalf`
+ * points, because a trend claimed from three data points is a guess, and this
+ * tool would rather report nothing than something shaped like a finding.
+ */
+export async function metricDrift(
+  projectId: string,
+  options?: { window?: number; minHalf?: number },
+): Promise<MetricDrift[]> {
+  const minHalf = Math.max(2, options?.minHalf ?? 4);
+  // An even window so the two halves are the same size and comparable.
+  const window = Math.max(minHalf * 2, Math.min(options?.window ?? 20, 200)) & ~1;
+
+  const gateRows = await db
+    .select({
+      gateKey: gates.key,
+      metricName: gates.metricName,
+      metricDirection: gates.metricDirection,
+    })
+    .from(gates)
+    .where(
+      and(eq(gates.projectId, projectId), sql`${gates.metricDirection} IS NOT NULL`),
+    );
+
+  const drifts: MetricDrift[] = [];
+
+  for (const gate of gateRows) {
+    const points = await metricHistory(projectId, gate.gateKey, window);
+
+    // Use what history there is, but split it evenly and refuse to work from
+    // halves too thin to tell a trend from a coin flip.
+    const halfSize = Math.floor(points.length / 2);
+    if (halfSize < minHalf) continue;
+
+    const values = points.map((point) => point.value);
+    const earlierMedian = median(values.slice(0, halfSize));
+    const recentMedian = median(values.slice(-halfSize));
+
+    const worsening =
+      gate.metricDirection === "higher_is_better"
+        ? recentMedian < earlierMedian
+        : recentMedian > earlierMedian;
+
+    // A metric holding steady or improving is not drift. Reporting it as a
+    // finding would train people to ignore the section.
+    if (!worsening) continue;
+
+    drifts.push({
+      gateKey: gate.gateKey,
+      metricName: gate.metricName!,
+      direction: gate.metricDirection!,
+      earlierMedian,
+      recentMedian,
+      delta: recentMedian - earlierMedian,
+      percentChange:
+        earlierMedian === 0 ? null : (recentMedian - earlierMedian) / earlierMedian,
+      halfSize,
+      worsening,
+    });
+  }
+
+  return drifts;
 }
 
 /** A metric's history, oldest first, for charting. */
