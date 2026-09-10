@@ -3,14 +3,14 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import prettierConfig from "eslint-config-prettier";
 
-// Module boundary rules from docs/adr/0005-module-boundaries.md.
+// Module boundary rules from docs/adr/0002-module-boundaries.md.
 // Enforced with no-restricted-imports rather than a workspace/package split —
 // see the ADR for why. Deep imports into another module's internals (i.e.
 // anything but its index.ts) are blocked everywhere via the shared pattern.
 const noDeepModuleImports = {
   group: ["@/modules/*/*", "!@/modules/*/index"],
   message:
-    "Import from a module's index.ts, not its internals. See docs/adr/0005-module-boundaries.md.",
+    "Import from a module's index.ts, not its internals. See docs/adr/0002-module-boundaries.md.",
 };
 
 const eslintConfig = defineConfig([
@@ -48,7 +48,7 @@ const eslintConfig = defineConfig([
                 "@/lib/db/*",
               ],
               message:
-                "runner/ must not import storage or persistence. See docs/adr/0005-module-boundaries.md.",
+                "runner/ must not import storage or persistence. See docs/adr/0002-module-boundaries.md.",
             },
           ],
         },
@@ -68,7 +68,7 @@ const eslintConfig = defineConfig([
             {
               group: ["@/modules/runner", "@/modules/runner/*"],
               message:
-                "app/ must not execute gates. Read results through runs/ and analysis/. See docs/adr/0005-module-boundaries.md.",
+                "app/ must not execute gates. Read results through runs/ and analysis/. See docs/adr/0002-module-boundaries.md.",
             },
           ],
         },
@@ -88,7 +88,7 @@ const eslintConfig = defineConfig([
             {
               group: ["@/modules", "@/modules/*"],
               message:
-                "lib/ must not import from modules/. Dependencies point one way. See docs/adr/0005-module-boundaries.md.",
+                "lib/ must not import from modules/. Dependencies point one way. See docs/adr/0002-module-boundaries.md.",
             },
           ],
         },

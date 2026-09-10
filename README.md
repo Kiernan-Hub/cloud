@@ -154,9 +154,10 @@ it reports the size of that one hop rather than the size of the slide.
 Medians of two halves see through that, and one bad reading can neither
 manufacture a trend nor hide one.
 
-Drift is only reported when both halves of the window are full. A trend
-claimed from three data points is a guess, and the honest answer is to say
-nothing rather than to print something shaped like a finding.
+Whatever history exists is used, up to the window — a young project still gets
+an answer — but each half must hold at least four points. A trend claimed from
+three data points is a guess, and the honest answer is to say nothing rather
+than to print something shaped like a finding.
 
 ## Retention
 
@@ -286,6 +287,11 @@ See [`CLAUDE.md`](CLAUDE.md). The short version: a modular monolith plus a
 worker over one Postgres database, where `runner/` (which executes commands)
 is prevented by lint from importing storage — keeping "what happened" separate
 from "what we recorded about it".
+
+Design decisions and their costs are recorded as ADRs in
+[`docs/adr/`](docs/adr/) — why a partial run is not a pass, why dirty runs are
+not evidence of flakiness, why results are never deleted, and why the worker
+does nothing until a repo asks it to.
 
 Documentation for the previous project in this repo is archived under
 [`docs/archive/`](docs/archive/).

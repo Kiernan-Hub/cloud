@@ -66,7 +66,8 @@ CLI / dashboard ──▶ runs ──▶ runner ──▶ your repo's commands
 - Prune bytes, never evidence. Captured output ages out; gate results do not,
   because the status is the measurement. Anything discarded says it was
   discarded rather than reading as absence.
-- Small, reversible decisions, written down when non-obvious.
+- Small, reversible decisions, written down when non-obvious — as an ADR in
+  `docs/adr/` when the reasoning would not be legible from the diff.
 - Structured logs with a run ID on every line.
 
 ## Red flags — stop or rethink
