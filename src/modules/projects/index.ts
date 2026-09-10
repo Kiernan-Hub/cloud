@@ -162,6 +162,42 @@ export async function upsertGate(projectId: string, input: GateInput): Promise<G
 }
 
 /**
+ * Delete a project, its gates, and every result ever recorded for it.
+ *
+ * This is the one destructive operation in the tool, and it is deliberately
+ * not something any other code path can reach: `gk sync` never removes a
+ * project, and the worker never does either. Everywhere else, history is kept
+ * — a deleted gate keeps its results, and retention drops output but never
+ * rows. Here the caller is asking for the records to be gone, so they go, and
+ * the caller is told what the count was first.
+ *
+ * Returns null when there is no such project, so the caller can say so rather
+ * than reporting a successful deletion of nothing.
+ */
+export async function forgetProject(projectId: string): Promise<{ runs: number } | null> {
+  const project = await getProject(projectId);
+  if (!project) return null;
+
+  const [counted] = await db.execute<{ runs: number }>(
+    sql`SELECT COUNT(*)::int AS runs FROM check_runs WHERE project_id = ${projectId}`,
+  );
+
+  // gates and check_runs cascade from projects; gate_results cascades from
+  // check_runs.
+  await db.delete(projects).where(eq(projects.id, projectId));
+
+  return { runs: counted?.runs ?? 0 };
+}
+
+/** How many runs a project has, for warning before `forgetProject`. */
+export async function countRuns(projectId: string): Promise<number> {
+  const [row] = await db.execute<{ runs: number }>(
+    sql`SELECT COUNT(*)::int AS runs FROM check_runs WHERE project_id = ${projectId}`,
+  );
+  return row?.runs ?? 0;
+}
+
+/**
  * Remove gates that are no longer in the config.
  *
  * Their historical results survive: gate_results denormalizes gate_key,

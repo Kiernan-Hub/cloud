@@ -6,7 +6,13 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, db } from "@/lib/db";
 import { checkRuns } from "@/lib/db/schema";
-import { projectsDueForRun, upsertProject } from "./index";
+import {
+  countRuns,
+  forgetProject,
+  getProject,
+  projectsDueForRun,
+  upsertProject,
+} from "./index";
 
 const SCHEDULED = "test-projects-scheduled";
 const MANUAL = "test-projects-manual";
@@ -51,6 +57,42 @@ beforeEach(cleanup);
 afterAll(async () => {
   await cleanup();
   await closeDb();
+});
+
+describe("forgetProject", () => {
+  it("removes the project and cascades its history", async () => {
+    await upsertProject({ id: MANUAL, name: "Manual", repoPath: "/tmp/manual" });
+    await recordRun(MANUAL, "passed", 1);
+    await recordRun(MANUAL, "failed", 2);
+
+    const removed = await forgetProject(MANUAL);
+
+    // The count is reported so the caller can say what was lost.
+    expect(removed).toEqual({ runs: 2 });
+    expect(await getProject(MANUAL)).toBeNull();
+
+    const [remaining] = await db.execute<{ runs: number }>(
+      sql`SELECT COUNT(*)::int AS runs FROM check_runs WHERE project_id = ${MANUAL}`,
+    );
+    expect(remaining!.runs).toBe(0);
+  });
+
+  it("returns null for a project that was never registered", async () => {
+    // So the caller can say so rather than reporting a successful deletion
+    // of nothing.
+    expect(await forgetProject("never-existed")).toBeNull();
+  });
+
+  it("leaves other projects alone", async () => {
+    await upsertProject({ id: MANUAL, name: "Manual", repoPath: "/tmp/manual" });
+    await upsertProject({ id: SCHEDULED, name: "Kept", repoPath: "/tmp/kept" });
+    await recordRun(SCHEDULED, "passed", 1);
+
+    await forgetProject(MANUAL);
+
+    expect(await getProject(SCHEDULED)).not.toBeNull();
+    expect(await countRuns(SCHEDULED)).toBe(1);
+  });
 });
 
 describe("projectsDueForRun", () => {

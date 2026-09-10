@@ -17,6 +17,7 @@ import { getConfig } from "@/lib/config";
 import { closeDb } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { projectsDueForRun } from "@/modules/projects";
+import { NotAGitRepoError } from "@/modules/runner";
 import { pruneOutput, reconcileAbandonedRuns, runChecks } from "@/modules/runs";
 
 // How old an unfinished run must be before the worker declares it abandoned.
@@ -28,6 +29,16 @@ const ABANDONED_AFTER_MS = 12 * 60 * 60 * 1000;
 
 let shuttingDown = false;
 let activeWork: Promise<unknown> = Promise.resolve();
+
+// Projects whose repo we could not find, so the same "it is still gone" is
+// not reported on every tick.
+//
+// A vanished repo never records a run, so the project stays due forever and
+// is retried every tick — at the default cadence that is a identical error
+// line every minute, indefinitely, for a directory that is not coming back.
+// The condition still matters, so it is reported once when it starts and once
+// when it ends, rather than either spammed or swallowed.
+const unreachable = new Set<string>();
 
 async function tick(): Promise<void> {
   await reconcileAbandonedRuns(ABANDONED_AFTER_MS);
@@ -49,6 +60,13 @@ async function tick(): Promise<void> {
         repoPath: project.repoPath,
         trigger: "scheduled",
       });
+      if (unreachable.delete(project.id)) {
+        logger.info("repository is back", {
+          project_id: project.id,
+          repo_path: project.repoPath,
+        });
+      }
+
       logger.info("scheduled run complete", {
         project_id: project.id,
         status: summary.status,
@@ -56,6 +74,19 @@ async function tick(): Promise<void> {
       });
     } catch (error: unknown) {
       // One unreachable repo must not stop the rest.
+      if (error instanceof NotAGitRepoError) {
+        // Deleted or moved, most likely. Say so once and stay quiet until
+        // something changes — either it comes back, or `gk forget` drops it.
+        if (!unreachable.has(project.id)) {
+          unreachable.add(project.id);
+          logger.warn("repository not found — skipping until it returns", {
+            project_id: project.id,
+            repo_path: project.repoPath,
+          });
+        }
+        continue;
+      }
+
       logger.error("scheduled run failed", {
         project_id: project.id,
         error: error instanceof Error ? error.message : String(error),

@@ -5,6 +5,7 @@
 //   gatekeeper run   [--repo <path>] [--only lint,test] [--repeat N]
 //   gatekeeper show  [run-id]          replay a run's captured output
 //   gatekeeper prune [--days N]        age out captured output, keeping results
+//   gatekeeper forget <id>             drop a project and everything recorded
 //   gatekeeper list                    show registered projects
 //
 // `run` exits non-zero when a blocking gate fails, so it works as a git hook
@@ -25,6 +26,9 @@ import { closeDb } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { tallyAttempts } from "@/modules/analysis";
 import {
+  countRuns,
+  forgetProject,
+  getProject,
   listProjects,
   removeGatesNotIn,
   upsertGate,
@@ -49,6 +53,7 @@ const { values, positionals } = parseArgs({
     all: { type: "boolean", default: false },
     days: { type: "string" },
     "dry-run": { type: "boolean", default: false },
+    force: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
   allowPositionals: true,
@@ -62,12 +67,14 @@ gatekeeper — run and track your project's quality gates
   gatekeeper run    [--repo <path>] [--only lint,test] [--repeat N]
   gatekeeper show   [run-id] [--all]       replay a run's captured output
   gatekeeper prune  [--days N] [--dry-run] age out captured output
+  gatekeeper forget <id> --force           drop a project and its history
   gatekeeper list                          list registered projects
 
 --repeat runs the gates N times on one commit to hunt a flaky gate.
 --repo defaults to the current directory.
 show defaults to the latest run, and to the gates that did not pass.
 prune drops stored output only; result rows are never deleted.
+forget is the one command that deletes history, and needs --force.
 run exits non-zero if a blocking gate fails.
 `;
 
@@ -473,6 +480,50 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Drop a project and everything recorded for it.
+ *
+ * The only command that destroys history, so it says exactly how much before
+ * doing it and will not proceed without `--force`. Every other part of the
+ * tool goes out of its way to keep results; this one needs to be asked twice.
+ */
+async function cmdForget(): Promise<number> {
+  const projectId = positionals[1];
+  if (!projectId) {
+    err("Usage: gatekeeper forget <project-id> --force");
+    err("Run `gatekeeper list` to see registered projects.");
+    return 2;
+  }
+
+  const project = await getProject(projectId);
+  if (!project) {
+    err(`No project registered with id '${projectId}'.`);
+    return 1;
+  }
+
+  const runs = await countRuns(projectId);
+
+  if (!values.force) {
+    out(`'${projectId}' has ${runs} recorded run(s) at ${project.repoPath}.`);
+    out("Forgetting it deletes the project, its gates, and every result —");
+    out("including the repeated runs that are the flake evidence.");
+    out("");
+    out(`Re-run with --force to do it: gatekeeper forget ${projectId} --force`);
+    // Not an error: the user asked a question and got an answer.
+    return 0;
+  }
+
+  const removed = await forgetProject(projectId);
+  if (!removed) {
+    err(`No project registered with id '${projectId}'.`);
+    return 1;
+  }
+
+  out(`Forgot '${projectId}' and ${removed.runs} run(s).`);
+  out(`${GATEFILE_NAME} in the repo is untouched; re-run sync to register it again.`);
+  return 0;
+}
+
 async function cmdList(): Promise<number> {
   const all = await listProjects();
   if (all.length === 0) {
@@ -509,6 +560,8 @@ async function main(): Promise<number> {
       return cmdShow();
     case "prune":
       return cmdPrune();
+    case "forget":
+      return cmdForget();
     case "list":
       return cmdList();
     default:

@@ -162,6 +162,26 @@ an answer — but each half must hold at least four points. A trend claimed from
 three data points is a guess, and the honest answer is to say nothing rather
 than to print something shaped like a finding.
 
+## Removing a project
+
+`gatekeeper sync` registers a project; nothing else ever unregisters one. If
+you delete or move a repo, it stays registered — and if it had a schedule, the
+worker reports the repository as missing once and then leaves it alone rather
+than retrying it every tick forever.
+
+```bash
+gatekeeper forget my-app            # says what would be lost, deletes nothing
+gatekeeper forget my-app --force    # actually does it
+```
+
+This is the **one command that deletes history**, which is why it needs asking
+twice. Everywhere else results are kept: a deleted gate keeps its past
+results, and retention drops captured output but never rows. `forget` removes
+the project, its gates, and every result — including the repeated runs that
+are the flake evidence.
+
+The repo's own `gatekeeper.json` is untouched, so `sync` re-registers it.
+
 ## Retention
 
 Gate results are **never deleted**. They are the flake evidence, the pass
@@ -226,14 +246,14 @@ print something and it was our housekeeping that discarded it.
 
 ## Scripts
 
-| Command                                 | What it does                                        |
-| --------------------------------------- | --------------------------------------------------- |
-| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `show`, `prune`, `list` |
-| `npm run dev`                           | Dashboard at localhost:3000                         |
-| `npm run worker`                        | Runs projects that set a `scheduleMinutes`          |
-| `npm test`                              | Unit + integration tests (needs Postgres)           |
-| `npm run lint` / `typecheck` / `format` | Checks                                              |
-| `npm run db:migrate`                    | Apply migrations                                    |
+| Command                                 | What it does                                                  |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `npm run gk -- <cmd>`                   | CLI: `init`, `sync`, `run`, `show`, `prune`, `forget`, `list` |
+| `npm run dev`                           | Dashboard at localhost:3000                                   |
+| `npm run worker`                        | Runs projects that set a `scheduleMinutes`                    |
+| `npm test`                              | Unit + integration tests (needs Postgres)                     |
+| `npm run lint` / `typecheck` / `format` | Checks                                                        |
+| `npm run db:migrate`                    | Apply migrations                                              |
 
 ## How it reports things
 
