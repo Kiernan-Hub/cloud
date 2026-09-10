@@ -1,5 +1,10 @@
 # CLAUDE.md — Working Guide for This Repo
 
+> **Picking up mid-stream?** [`HANDOFF.md`](HANDOFF.md) has the current state:
+> what is in flight, what is decided, what is waiting on a human, and the
+> environment gotchas that otherwise cost an hour. This file is the durable
+> guide to _how_ to work here; that one is _where things stand_.
+
 ## What we're building
 
 **Gatekeeper** — a local tool that runs your project's quality gates (lint,
