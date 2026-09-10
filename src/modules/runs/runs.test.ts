@@ -18,6 +18,7 @@ import {
   listRuns,
   pruneOutput,
   reconcileAbandonedRuns,
+  resolveRunId,
   RunCanceled,
   runChecks,
 } from "@/modules/runs";
@@ -351,6 +352,39 @@ describe("a run always reaches a terminal status", () => {
   });
 });
 
+describe("a canceled run keeps the interrupted gate's evidence", () => {
+  it("records the gate that was running when Ctrl-C arrived", async () => {
+    await upsertGate(PROJECT, {
+      key: "slow",
+      name: "Slow",
+      command: "echo starting; sleep 30",
+    });
+
+    const aborter = new AbortController();
+    // Abort once the gate has had time to print, so there is output to lose.
+    setTimeout(() => aborter.abort(), 700);
+
+    await expect(
+      runChecks({ projectId: PROJECT, repoPath, signal: aborter.signal }),
+    ).rejects.toBeInstanceOf(RunCanceled);
+
+    // The gate ran and was stopped. Throwing before the insert would leave no
+    // row at all, so the run would show the gate simply missing — which reads
+    // as a gate that was never part of the set rather than one we interrupted.
+    const rows = await db.execute<{
+      gate_key: string;
+      status: string;
+      stdout_tail: string;
+    }>(
+      sql`SELECT gate_key, status, stdout_tail FROM gate_results
+          WHERE project_id = ${PROJECT} AND gate_key = 'slow'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("error");
+    expect(rows[0]!.stdout_tail).toContain("starting");
+  }, 20_000);
+});
+
 describe("pruneOutput", () => {
   /** Backdate a run and its results, so retention has something old to find. */
   async function backdate(runId: string, days: number) {
@@ -417,6 +451,34 @@ describe("getRun", () => {
 
   it("returns null for an unknown run", async () => {
     await expect(getRun("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
+  });
+});
+
+describe("resolveRunId", () => {
+  it("accepts the short id the CLI tells you to use", async () => {
+    await upsertGate(PROJECT, { key: "quick", name: "Quick", command: "exit 0" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+
+    // `gk run` prints exactly this on failure: `gatekeeper show <8 chars>`.
+    const short = summary.runId.slice(0, 8);
+    const match = await resolveRunId(short);
+
+    expect(match).toEqual({ kind: "found", id: summary.runId });
+  });
+
+  it("still accepts a full uuid", async () => {
+    await upsertGate(PROJECT, { key: "quick", name: "Quick", command: "exit 0" });
+    const summary = await runChecks({ projectId: PROJECT, repoPath });
+
+    await expect(resolveRunId(summary.runId)).resolves.toEqual({
+      kind: "found",
+      id: summary.runId,
+    });
+  });
+
+  it("reports an unknown id rather than matching something else", async () => {
+    await expect(resolveRunId("ffffffff")).resolves.toEqual({ kind: "not_found" });
+    await expect(resolveRunId("not-hex-at-all")).resolves.toEqual({ kind: "not_found" });
   });
 });
 

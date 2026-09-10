@@ -18,7 +18,7 @@
 //     excluded from every statistic, so a crashed run would quietly erase
 //     itself rather than report that it failed to finish.
 
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, like, lt, sql } from "drizzle-orm";
 import { join } from "node:path";
 
 import { db } from "@/lib/db";
@@ -161,8 +161,12 @@ export async function runChecks(options: RunOptions): Promise<RunSummary> {
 
       // execute() does not resolve until the child is actually dead, so by
       // here the killed gate is gone rather than orphaned on the machine.
-      if (options.signal?.aborted) throw new RunCanceled();
-
+      //
+      // The cancel is *not* raised here: execute() has already produced a
+      // result for the interrupted gate, and throwing before the insert would
+      // discard it — the run would show the gate simply missing rather than
+      // stopped, losing the captured output that says how far it got. Record
+      // it first, then unwind below.
       const combinedOutput = `${result.stdoutTail}\n${result.stderrTail}`;
       const metricValue = gate.metricPattern
         ? extractMetric(combinedOutput, gate.metricPattern)
@@ -194,6 +198,9 @@ export async function runChecks(options: RunOptions): Promise<RunSummary> {
         metricValue,
         exitCode: result.exitCode,
       });
+
+      // Now that the interrupted gate's evidence is stored, unwind.
+      if (options.signal?.aborted) throw new RunCanceled();
 
       const level = result.status === "passed" ? "info" : "warn";
       runLogger[level]("gate finished", {
@@ -390,6 +397,49 @@ export async function listRuns(projectId: string, limit = 25): Promise<CheckRun[
     .where(eq(checkRuns.projectId, projectId))
     .orderBy(desc(checkRuns.startedAt))
     .limit(Math.min(Math.max(1, limit), 200));
+}
+
+/**
+ * Resolve a run id that a human typed or pasted.
+ *
+ * `gk run` prints an 8-character id and tells you to pass it to `gk show`, so
+ * the short form has to work — a tool that suggests a command it then rejects
+ * is worse than one that never suggested it. A prefix matching more than one
+ * run is reported as ambiguous rather than resolved to an arbitrary pick:
+ * showing the wrong run's output during a debug is a costly kind of wrong.
+ */
+export type RunIdMatch =
+  | { kind: "found"; id: string }
+  | { kind: "ambiguous"; ids: string[] }
+  | { kind: "not_found" };
+
+export async function resolveRunId(idOrPrefix: string): Promise<RunIdMatch> {
+  const candidate = idOrPrefix.trim().toLowerCase();
+
+  // A full uuid needs no search.
+  if (/^[0-9a-f-]{36}$/.test(candidate)) {
+    const [run] = await db
+      .select({ id: checkRuns.id })
+      .from(checkRuns)
+      .where(eq(checkRuns.id, candidate))
+      .limit(1);
+    return run ? { kind: "found", id: run.id } : { kind: "not_found" };
+  }
+
+  // Anything that is not hex cannot prefix a uuid; reject it before building
+  // a LIKE pattern out of user input.
+  if (!/^[0-9a-f-]{4,35}$/.test(candidate)) return { kind: "not_found" };
+
+  const matches = await db
+    .select({ id: checkRuns.id })
+    .from(checkRuns)
+    .where(like(sql`${checkRuns.id}::text`, `${candidate}%`))
+    // One more than we need, so "ambiguous" is a fact rather than a guess.
+    .limit(5);
+
+  if (matches.length === 0) return { kind: "not_found" };
+  if (matches.length > 1) return { kind: "ambiguous", ids: matches.map((m) => m.id) };
+  return { kind: "found", id: matches[0]!.id };
 }
 
 export async function getRun(

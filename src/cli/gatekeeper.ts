@@ -36,6 +36,7 @@ import {
 } from "@/modules/projects";
 import {
   getRun,
+  resolveRunId,
   latestRun,
   pruneOutput,
   RunCanceled,
@@ -187,6 +188,19 @@ async function cmdRun(): Promise<number> {
     ?.split(",")
     .map((key) => key.trim())
     .filter(Boolean);
+
+  // A key that matches no gate is a typo, not a selection. Left unchecked,
+  // every gate is recorded `skipped`, the verdict is `partial`, and the run
+  // exits 0 — a pre-push hook reporting success having checked nothing.
+  if (only && only.length > 0) {
+    const known = new Set(config.gates.map((gate) => gate.key));
+    const unknown = only.filter((key) => !known.has(key));
+    if (unknown.length > 0) {
+      err(`--only: no such gate: ${unknown.join(", ")}`);
+      err(`Gates in this project: ${config.gates.map((gate) => gate.key).join(", ")}`);
+      return 2;
+    }
+  }
 
   const trigger = values.trigger;
   if (trigger !== "manual" && trigger !== "scheduled" && trigger !== "watch") {
@@ -363,7 +377,19 @@ async function cmdShow(): Promise<number> {
 
   let found;
   if (runId) {
-    found = await getRun(runId);
+    // Accepts the 8-character form `gk run` prints, not just a full uuid.
+    const match = await resolveRunId(runId);
+    if (match.kind === "not_found") {
+      err(`No run found with id '${runId}'.`);
+      return 1;
+    }
+    if (match.kind === "ambiguous") {
+      err(`'${runId}' matches more than one run:`);
+      for (const id of match.ids) err(`  ${id}`);
+      err("Use more characters of the id.");
+      return 2;
+    }
+    found = await getRun(match.id);
     if (!found) {
       err(`No run found with id '${runId}'.`);
       return 1;

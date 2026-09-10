@@ -3,6 +3,7 @@
 // would test nothing.
 
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { execute, extractMetric } from "./execute";
@@ -37,6 +38,25 @@ describe("execute", () => {
     // Keeping them apart matters: a passing command that writes warnings to
     // stderr should not look like it failed.
     expect(result.stdoutTail).not.toContain("to-stderr");
+  });
+
+  it("reports a gate that could not start as error, not a rejection", async () => {
+    // A cwd that does not exist. Note this arrives as an async 'error' event,
+    // not a synchronous throw from spawn — verified, and the reason the
+    // synchronous catch in execute() is unreachable through this API today.
+    // It is still kept (and no longer references the timer before it exists),
+    // because a future caller that does trip it should get an `error` result
+    // rather than a ReferenceError that crashes the whole run.
+    const result = await execute({
+      command: "echo hello",
+      cwd: join(cwd, "does-not-exist-anywhere"),
+      timeoutSeconds: 10,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.exitCode).toBeNull();
+    // And it has to say *why*, or the status is an unactionable shrug.
+    expect(result.stderrTail).not.toBe("");
   });
 
   it("kills a hanging command and reports it as timed out, not failed", async () => {

@@ -92,6 +92,13 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
     let aborted = false;
     let settled = false;
 
+    // Both of these are reachable from `finish`, which runs on the
+    // spawn-failed path *before* the timer is ever armed. A `const` declared
+    // further down would be in its temporal dead zone there, so `finish`
+    // would throw a ReferenceError instead of reporting `error` — exactly the
+    // "could not run" case the status exists for.
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+
     // A declaration, not a const, so `finish` can detach it even on the
     // spawn-failed path that runs before the listener is ever attached.
     function onAbort() {
@@ -135,9 +142,11 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
         detached: true,
       });
     } catch (error: unknown) {
-      // Could not even start: a bad cwd, usually.
-      finish("error", null, null);
+      // Could not even start: a bad cwd, usually. Push the reason *before*
+      // finishing — `finish` snapshots the tails, so anything appended after
+      // it is written to a result nobody will ever read.
       stderr.push(Buffer.from(error instanceof Error ? error.message : String(error)));
+      finish("error", null, null);
       return;
     }
 
@@ -161,7 +170,7 @@ export function execute(options: ExecuteOptions): Promise<ExecuteResult> {
       }
     };
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       timedOut = true;
       killGroup();
     }, options.timeoutSeconds * 1000);
