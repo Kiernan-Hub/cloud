@@ -14,7 +14,7 @@
 // loop.
 
 import { getConfig } from "@/lib/config";
-import { sqlClient } from "@/lib/db";
+import { closeDb } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { projectsDueForRun } from "@/modules/projects";
 import { pruneOutput, reconcileAbandonedRuns, runChecks } from "@/modules/runs";
@@ -87,7 +87,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info("worker shutting down", { signal });
   // Let the in-flight run finish so no check_run is orphaned in 'running'.
   await activeWork;
-  await sqlClient.end();
+  await closeDb();
   process.exit(0);
 }
 
@@ -98,6 +98,6 @@ main().catch(async (error: unknown) => {
   logger.error("worker crashed", {
     error: error instanceof Error ? error.message : String(error),
   });
-  await sqlClient.end();
+  await closeDb();
   process.exit(1);
 });

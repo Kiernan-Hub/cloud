@@ -21,7 +21,7 @@ import {
   getConfig,
   loadGatefile,
 } from "@/lib/config";
-import { sqlClient } from "@/lib/db";
+import { closeDb } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { tallyAttempts } from "@/modules/analysis";
 import {
@@ -520,7 +520,7 @@ async function main(): Promise<number> {
 
 main()
   .then(async (code) => {
-    await sqlClient.end();
+    await closeDb();
     process.exit(code);
   })
   .catch(async (error: unknown) => {
@@ -531,6 +531,6 @@ main()
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    await sqlClient.end();
+    await closeDb();
     process.exit(2);
   });

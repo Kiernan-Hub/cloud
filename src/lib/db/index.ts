@@ -58,5 +58,22 @@ function lazy<T extends object>(resolve: () => T): T {
 }
 
 export const db = lazy<Database>(() => connection().db);
-export const sqlClient = lazy<ReturnType<typeof postgres>>(() => connection().client);
 export { schema };
+
+/**
+ * Close the pool, if one was ever opened.
+ *
+ * Deliberately not an exported client with an `.end()` on it: reaching through
+ * the lazy proxy to close would *open* a connection first. That made
+ * `gatekeeper init` — which touches no database, and is the first command
+ * anyone runs — write its file, print its success message, and then exit
+ * non-zero complaining about DATABASE_URL.
+ */
+export async function closeDb(): Promise<void> {
+  const existing = globalForDb.gatekeeperDb ?? local;
+  if (!existing) return;
+
+  globalForDb.gatekeeperDb = undefined;
+  local = undefined;
+  await existing.client.end();
+}

@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { db, sqlClient } from "@/lib/db";
+import { closeDb, db } from "@/lib/db";
 import { checkRuns, gateResults } from "@/lib/db/schema";
 import { upsertGate, upsertProject } from "@/modules/projects";
 import {
@@ -42,7 +42,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.execute(sql`DELETE FROM projects WHERE id = ${PROJECT}`);
-  await sqlClient.end();
+  await closeDb();
   await rm(repoPath, { recursive: true, force: true });
 });
 

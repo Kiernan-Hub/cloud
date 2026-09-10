@@ -4,7 +4,7 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { db, sqlClient } from "@/lib/db";
+import { closeDb, db } from "@/lib/db";
 import { checkRuns } from "@/lib/db/schema";
 import { projectsDueForRun, upsertProject } from "./index";
 
@@ -50,7 +50,7 @@ beforeEach(cleanup);
 
 afterAll(async () => {
   await cleanup();
-  await sqlClient.end();
+  await closeDb();
 });
 
 describe("projectsDueForRun", () => {
