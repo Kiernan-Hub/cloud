@@ -82,6 +82,12 @@ attempts are excluded from flake detection entirely.
 Every attempt is stored, so the burst also feeds the flake rate on the
 dashboard rather than being a one-off report.
 
+The dashboard's **Flaky gates** section then lists each commit where a gate
+contradicted itself, and links a passing run and a failing run of that same
+commit side by side. A flake rate on its own is an accusation without
+evidence; the cause is usually visible in the difference between the two
+outputs.
+
 To read a run's output without leaving the terminal:
 
 ```bash

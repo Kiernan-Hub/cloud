@@ -82,6 +82,88 @@ export async function gateFlakiness(projectId: string): Promise<GateFlakiness[]>
   }));
 }
 
+export type FlakeEvidence = {
+  gateKey: string;
+  commitSha: string;
+  commitSubject: string | null;
+  attempts: number;
+  passes: number;
+  /** A run where it passed and one where it did not — the same code, both ways. */
+  passingRunId: string;
+  failingRunId: string;
+  failingStatus: "failed" | "timed_out";
+  lastSeen: Date;
+};
+
+/**
+ * The commits where a gate contradicted itself, with a run of each outcome.
+ *
+ * A flake rate on its own is an accusation without evidence: the next
+ * question is always "which commit, and can I see it both ways?". Returning a
+ * passing and a failing run for the same commit makes the two outputs
+ * directly comparable, which is usually where the cause is visible.
+ *
+ * Dirty runs are excluded here for the same reason they are excluded from the
+ * rate itself — the commit does not identify the code that ran, so the two
+ * outputs would not be comparable.
+ */
+export async function flakeEvidence(
+  projectId: string,
+  limit = 20,
+): Promise<FlakeEvidence[]> {
+  const rows = await db.execute<{
+    gate_key: string;
+    commit_sha: string;
+    commit_subject: string | null;
+    attempts: number;
+    passes: number;
+    passing_run_id: string;
+    failing_run_id: string;
+    failing_status: "failed" | "timed_out";
+    last_seen: Date;
+  }>(sql`
+    WITH clean AS (
+      SELECT r.gate_key, r.commit_sha, r.status, r.run_id, r.started_at, cr.commit_subject
+      FROM gate_results r
+      JOIN check_runs cr ON cr.id = r.run_id
+      WHERE r.project_id = ${projectId}
+        AND r.status IN ('passed', 'failed', 'timed_out')
+        AND NOT cr.dirty
+    )
+    SELECT
+      gate_key,
+      commit_sha,
+      MAX(commit_subject)                                     AS commit_subject,
+      COUNT(*)::int                                           AS attempts,
+      COUNT(*) FILTER (WHERE status = 'passed')::int          AS passes,
+      (ARRAY_AGG(run_id ORDER BY started_at DESC)
+         FILTER (WHERE status = 'passed'))[1]                 AS passing_run_id,
+      (ARRAY_AGG(run_id ORDER BY started_at DESC)
+         FILTER (WHERE status <> 'passed'))[1]                AS failing_run_id,
+      (ARRAY_AGG(status ORDER BY started_at DESC)
+         FILTER (WHERE status <> 'passed'))[1]                AS failing_status,
+      MAX(started_at)                                         AS last_seen
+    FROM clean
+    GROUP BY gate_key, commit_sha
+    HAVING COUNT(*) FILTER (WHERE status = 'passed') > 0
+       AND COUNT(*) FILTER (WHERE status <> 'passed') > 0
+    ORDER BY MAX(started_at) DESC
+    LIMIT ${Math.min(Math.max(1, limit), 100)}
+  `);
+
+  return rows.map((row) => ({
+    gateKey: row.gate_key,
+    commitSha: row.commit_sha,
+    commitSubject: row.commit_subject,
+    attempts: row.attempts,
+    passes: row.passes,
+    passingRunId: row.passing_run_id,
+    failingRunId: row.failing_run_id,
+    failingStatus: row.failing_status,
+    lastSeen: new Date(row.last_seen),
+  }));
+}
+
 /**
  * One gate's behaviour across a deliberate burst of repeats.
  *

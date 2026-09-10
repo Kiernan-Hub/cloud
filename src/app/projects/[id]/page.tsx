@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import {
   findRegressions,
+  flakeEvidence,
   gateFlakiness,
   gateReliability,
   metricHistory,
@@ -28,14 +29,16 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [summary, runs, reliability, flakiness, regressions, gates] = await Promise.all([
-    projectSummary(id),
-    listRuns(id, 20),
-    gateReliability(id),
-    gateFlakiness(id),
-    findRegressions(id),
-    listGates(id),
-  ]);
+  const [summary, runs, reliability, flakiness, flakes, regressions, gates] =
+    await Promise.all([
+      projectSummary(id),
+      listRuns(id, 20),
+      gateReliability(id),
+      gateFlakiness(id),
+      flakeEvidence(id, 10),
+      findRegressions(id),
+      listGates(id),
+    ]);
 
   const metricGates = gates.filter((gate) => gate.metricName && gate.metricDirection);
   const histories = await Promise.all(
@@ -113,6 +116,51 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      ) : null}
+
+      {flakes.length > 0 ? (
+        <>
+          <h2>Flaky gates</h2>
+          {/* A flake rate on its own is an accusation without evidence. The
+              next question is always "which commit, and can I see it both
+              ways?" — so link a passing and a failing run of the same code. */}
+          <p className="muted" style={{ marginTop: "-0.5rem", fontSize: "0.85rem" }}>
+            These gates gave different answers for the same commit. Compare the two runs —
+            the cause is usually visible in the difference.
+          </p>
+          <div className="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Gate</th>
+                  <th>Commit</th>
+                  <th className="num">Attempts</th>
+                  <th>Compare</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flakes.map((flake) => (
+                  <tr key={`${flake.gateKey}-${flake.commitSha}`}>
+                    <td className="mono">{flake.gateKey}</td>
+                    <td className="mono" title={flake.commitSubject ?? undefined}>
+                      {flake.commitSha.slice(0, 8)}
+                    </td>
+                    <td className="num">
+                      {flake.passes}/{flake.attempts} passed
+                    </td>
+                    <td>
+                      <Link href={`/runs/${flake.passingRunId}`}>passing</Link>
+                      {" · "}
+                      <Link href={`/runs/${flake.failingRunId}`}>
+                        {flake.failingStatus === "timed_out" ? "timed out" : "failing"}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       ) : null}

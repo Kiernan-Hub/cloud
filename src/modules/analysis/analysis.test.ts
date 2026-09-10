@@ -5,6 +5,7 @@ import { db, sqlClient } from "@/lib/db";
 import { checkRuns, gateResults, gates, projects } from "@/lib/db/schema";
 import {
   findRegressions,
+  flakeEvidence,
   gateFlakiness,
   gateReliability,
   metricHistory,
@@ -197,6 +198,69 @@ describe("gateFlakiness", () => {
     // The dirty attempt is discarded; the two clean ones still contradict.
     expect(entry!.totalRuns).toBe(2);
     expect(entry!.flakeRate).toBe(1);
+  });
+});
+
+describe("flakeEvidence", () => {
+  it("returns the commit and a run of each outcome", async () => {
+    const gateId = await makeGate("flaky");
+    await record(gateId, "flaky", "commit-a", "passed");
+    await record(gateId, "flaky", "commit-a", "failed");
+
+    const [entry] = await flakeEvidence(PROJECT);
+
+    expect(entry!.commitSha).toBe("commit-a");
+    expect(entry!.attempts).toBe(2);
+    expect(entry!.passes).toBe(1);
+    // The payoff: the same code, both ways, so the two outputs can be
+    // compared directly.
+    expect(entry!.passingRunId).toBeTruthy();
+    expect(entry!.failingRunId).toBeTruthy();
+    expect(entry!.passingRunId).not.toBe(entry!.failingRunId);
+  });
+
+  it("says which way it failed", async () => {
+    const gateId = await makeGate("slow");
+    await record(gateId, "slow", "commit-a", "passed");
+    await record(gateId, "slow", "commit-a", "timed_out");
+
+    // A gate that sometimes times out calls for a different response than
+    // one that sometimes fails, so the distinction survives to here.
+    expect((await flakeEvidence(PROJECT))[0]!.failingStatus).toBe("timed_out");
+  });
+
+  it("returns nothing for a gate that always agreed with itself", async () => {
+    const gateId = await makeGate("steady");
+    await record(gateId, "steady", "commit-a", "passed");
+    await record(gateId, "steady", "commit-a", "passed");
+    await record(gateId, "steady", "commit-b", "failed");
+    await record(gateId, "steady", "commit-b", "failed");
+
+    expect(await flakeEvidence(PROJECT)).toEqual([]);
+  });
+
+  it("excludes dirty runs, whose outputs are not comparable", async () => {
+    const gateId = await makeGate("edited-between");
+    await record(gateId, "edited-between", "commit-a", "passed", { dirty: true });
+    await record(gateId, "edited-between", "commit-a", "failed", { dirty: true });
+
+    // Same reason the rate excludes them: the commit does not identify the
+    // code, so there is no "same input" to show two answers for.
+    expect(await flakeEvidence(PROJECT)).toEqual([]);
+  });
+
+  it("reports each flaky commit separately, newest first", async () => {
+    const gateId = await makeGate("flaky");
+    await record(gateId, "flaky", "commit-old", "passed");
+    await record(gateId, "flaky", "commit-old", "failed");
+    await record(gateId, "flaky", "commit-new", "failed");
+    await record(gateId, "flaky", "commit-new", "passed");
+
+    const evidence = await flakeEvidence(PROJECT);
+    expect(evidence.map((entry) => entry.commitSha)).toEqual([
+      "commit-new",
+      "commit-old",
+    ]);
   });
 });
 
