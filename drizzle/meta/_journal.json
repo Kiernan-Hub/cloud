@@ -8,6 +8,27 @@
       "when": 1788797050485,
       "tag": "0000_giant_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788984779444,
+      "tag": "0001_keen_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788989260941,
+      "tag": "0002_flawless_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788990133322,
+      "tag": "0003_light_runaways",
+      "breakpoints": true
     }
   ]
 }

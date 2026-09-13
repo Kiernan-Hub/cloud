@@ -3,6 +3,7 @@
 // would test nothing.
 
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { execute, extractMetric } from "./execute";
@@ -39,6 +40,25 @@ describe("execute", () => {
     expect(result.stdoutTail).not.toContain("to-stderr");
   });
 
+  it("reports a gate that could not start as error, not a rejection", async () => {
+    // A cwd that does not exist. Note this arrives as an async 'error' event,
+    // not a synchronous throw from spawn — verified, and the reason the
+    // synchronous catch in execute() is unreachable through this API today.
+    // It is still kept (and no longer references the timer before it exists),
+    // because a future caller that does trip it should get an `error` result
+    // rather than a ReferenceError that crashes the whole run.
+    const result = await execute({
+      command: "echo hello",
+      cwd: join(cwd, "does-not-exist-anywhere"),
+      timeoutSeconds: 10,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.exitCode).toBeNull();
+    // And it has to say *why*, or the status is an unactionable shrug.
+    expect(result.stderrTail).not.toBe("");
+  });
+
   it("kills a hanging command and reports it as timed out, not failed", async () => {
     const result = await execute({
       command: "sleep 30",
@@ -62,6 +82,25 @@ describe("execute", () => {
     });
 
     expect(result.status).toBe("timed_out");
+  });
+
+  it("stops on abort and does not resolve until the child is dead", async () => {
+    const aborter = new AbortController();
+    setTimeout(() => aborter.abort(), 200);
+
+    const result = await execute({
+      command: "sleep 30",
+      cwd,
+      timeoutSeconds: 60,
+      signal: aborter.signal,
+    });
+
+    // We killed it before it could answer, so it did not fail — reporting
+    // `failed` would blame the command for our interrupt.
+    expect(result.status).toBe("error");
+    // Resolving early would let the caller exit while the command kept
+    // running, detached, on the user's machine.
+    expect(result.durationMs).toBeLessThan(10_000);
   });
 
   it("reports an unusable working directory as error, not failure", async () => {

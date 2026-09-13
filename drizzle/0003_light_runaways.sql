@@ -1,0 +1,2 @@
+ALTER TABLE "gate_results" ADD COLUMN "output_pruned" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "results_prunable_idx" ON "gate_results" USING btree ("started_at") WHERE NOT output_pruned;

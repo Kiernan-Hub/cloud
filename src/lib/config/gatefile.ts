@@ -47,6 +47,12 @@ export const gatefileSchema = z
         id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "must be a lowercase slug"),
         name: z.string().min(1),
         defaultBranch: z.string().default("main"),
+
+        // Opt-in: without this, the worker never touches the project. The
+        // floor of 5 minutes is not a performance guard but an honesty one —
+        // a gate suite that takes longer than its own interval would run
+        // back-to-back forever, which is not a schedule.
+        scheduleMinutes: z.number().int().min(5).max(10080).optional(),
       })
       .strict(),
     gates: z.array(gateSchema).min(1, "define at least one gate"),

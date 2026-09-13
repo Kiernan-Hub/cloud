@@ -23,7 +23,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
-COPY --from=builder /app/public ./public
+# No `public/` is copied because this project has no static assets and the
+# directory does not exist — COPY of a missing path fails the build. Add
+# `COPY --from=builder /app/public ./public` back alongside the directory,
+# or files put there will be missing from the image rather than merely
+# unused.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Migrations and worker source ship with the image so the same artifact can
